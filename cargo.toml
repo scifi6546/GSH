@@ -3,4 +3,5 @@ members = [
     "frontend",
     "parser",
     "view",
+    "prototype_render_api",
 ]
