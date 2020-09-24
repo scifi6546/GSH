@@ -1,3 +1,4 @@
+mod prototype;
 enum Command{
     Text{
         pos: (f32,f32),
@@ -8,7 +9,7 @@ enum Command{
         end: (f32,f32),
     }
 }
-struct RenderApi{
+pub struct RenderApi{
 
 }
 impl RenderApi{
@@ -16,11 +17,12 @@ impl RenderApi{
     pub fn draw_text(&self,cords: (f32,f32),text:String){}
     pub fn draw_line(&self,start: (f32,f32),end: (f32,f32)){}
 }
-struct WindowDimensions{
+pub struct WindowDimensions{
 
 }
 trait Terminal{
     fn draw(&self,render_api:&mut RenderApi){
+        render_api.draw_boarder(WindowDimensions{});
         self.getCommands().iter().map(|c|
         match c{
             Command::Text{
