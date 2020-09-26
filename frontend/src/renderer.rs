@@ -526,7 +526,7 @@ where
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            //cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_vertex_buffers(
                 0,

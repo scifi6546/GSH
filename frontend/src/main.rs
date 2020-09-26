@@ -28,6 +28,7 @@ pub fn wasm_main() {
 }
 mod renderer;
 mod text_render;
+mod front_end_api;
 use gfx_hal::{prelude::*, window};
 use renderer::Renderer;
 pub use renderer::Updater;

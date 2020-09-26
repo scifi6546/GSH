@@ -248,12 +248,6 @@ impl<B: gfx_hal::Backend> RenderTexture<B> {
         cmd_buffer: &mut B::CommandBuffer,
         queue_group: &mut QueueGroup<B>,
     ) {
-        for x in 15..=17 {
-            for y in 8..24 {
-                self.img.put_pixel(x, y, image::Rgba([255, 0, 0, 255]));
-                self.img.put_pixel(y, x, image::Rgba([255, 0, 0, 255]));
-            }
-        }
         //buffering texture
         let mut copy_fence = device.create_fence(false).expect("Could not create fence");
         unsafe {
