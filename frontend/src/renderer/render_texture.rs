@@ -253,16 +253,21 @@ impl<B: gfx_hal::Backend> RenderTexture<B> {
         unsafe {
             //freeing memory
             device.free_memory(ManuallyDrop::into_inner(ptr::read(
-                &self.image_upload_memory)));
-            
-            self.image_upload_memory = ManuallyDrop::new(device
-                .allocate_memory(self.upload_type, self.image_mem_reqs.size)
-                .unwrap());
-            
+                &self.image_upload_memory,
+            )));
+
+            self.image_upload_memory = ManuallyDrop::new(
+                device
+                    .allocate_memory(self.upload_type, self.image_mem_reqs.size)
+                    .unwrap(),
+            );
+
             device
                 .bind_buffer_memory(&self.image_upload_memory, 0, &mut self.image_upload_buffer)
                 .unwrap();
-            let mapping = device.map_memory(&self.image_upload_memory, m::Segment::ALL).unwrap();
+            let mapping = device
+                .map_memory(&self.image_upload_memory, m::Segment::ALL)
+                .unwrap();
             for y in 0..self.height as usize {
                 let row = &(*self.img)[y * (self.width as usize) * self.image_stride
                     ..(y + 1) * (self.width as usize) * self.image_stride];
@@ -276,7 +281,7 @@ impl<B: gfx_hal::Backend> RenderTexture<B> {
             //    .flush_mapped_memory_ranges(iter::once((&self.image_upload_memory, m::Segment::ALL)))
             //    .unwrap();
             //device.unmap_memory(&self.image_upload_memory);
-            
+
             //let mut cmd_buffer = command_pool.allocate_one(command::Level::Primary);
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 

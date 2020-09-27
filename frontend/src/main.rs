@@ -26,9 +26,9 @@ pub fn wasm_main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     main();
 }
+mod front_end_api;
 mod renderer;
 mod text_render;
-mod front_end_api;
 use gfx_hal::{prelude::*, window};
 use renderer::Renderer;
 pub use renderer::Updater;

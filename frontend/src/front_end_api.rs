@@ -1,26 +1,177 @@
-use nalgebra::{Vector2,Vector3};
+#[cfg(feature = "dx11")]
+extern crate gfx_backend_dx11 as back;
+#[cfg(feature = "dx12")]
+extern crate gfx_backend_dx12 as back;
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "dx11",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl",
+)))]
+extern crate gfx_backend_empty as back;
+#[cfg(all(unix, feature = "gl"))]
+extern crate gfx_backend_gl as back;
+#[cfg(feature = "metal")]
+extern crate gfx_backend_metal as back;
+#[cfg(feature = "vulkan")]
+extern crate gfx_backend_vulkan as back;
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn wasm_main() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    main();
+}
+use winit::event::KeyboardInput;
+use gfx_hal::{prelude::*, window};
+use nalgebra::{Vector2, Vector3};
 mod front_end;
-use front_end::{Engine,Event,DrawCall};
-struct Context{
+use front_end::{DrawCall, Engine, Event};
+struct Context {
     front_end: Engine,
 }
-impl Context{
-    fn new()->Self{
+const DEFAULT_SIZE: window::Extent2D = 
+    window::Extent2D { 
+        width: 1024, 
+        height: 700 
+    };
+impl Context {
+    fn new<B: gfx_hal::Backend>( instance: Option<B::Instance>,
+        mut surface: B::Surface,
+        adapter: gfx_hal::adapter::Adapter<B>) -> Self {
         unimplemented!()
-        
     }
-    fn render_loop(&mut self){
-        loop{
-            let e = self.get_events();
-            self.front_end.process_event(e);
-            let draw = self.front_end.get_draw_calls();
-            self.draw(draw);
+    fn process_event(&mut self,event: Event){
+        unimplemented!()
+    }
+    fn event_loop(&mut self,event: Vec<Event>) {
+       
+    }
+    fn get_events(&self) -> Vec<Event> {
+        unimplemented!()
+    }
+    fn resize(&mut self,new_dimensions: window::Extent2D){
+        unimplemented!()
+    }
+    fn draw(&mut self) {
+        unimplemented!()
+    }
+}
+fn to_event(event: KeyboardInput)->Event{
+    unimplemented!()
+}
+fn build_vulkan_context() {
+    #[cfg(target_arch = "wasm32")]
+    console_log::init_with_level(log::Level::Debug).unwrap();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    env_logger::init();
+
+    #[cfg(not(any(
+        feature = "vulkan",
+        feature = "dx11",
+        feature = "dx12",
+        feature = "metal",
+        feature = "gl",
+    )))]
+    eprintln!(
+        "You are running the example with the empty backend, no graphical output is to be expected"
+    );
+
+    let event_loop = winit::event_loop::EventLoop::new();
+
+    let wb = winit::window::WindowBuilder::new()
+        .with_min_inner_size(winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(
+            64.0, 64.0,
+        )))
+        .with_inner_size(winit::dpi::Size::Physical(winit::dpi::PhysicalSize::new(
+            DEFAULT_SIZE.width,
+            DEFAULT_SIZE.height,
+        )))
+        .with_title("quad".to_string());
+
+    // instantiate backend
+    #[cfg(not(target_arch = "wasm32"))]
+    let (_window, instance, mut adapters, surface) = {
+        let window = wb.build(&event_loop).unwrap();
+        let instance =
+            back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
+        let adapters = instance.enumerate_adapters();
+        let surface = unsafe {
+            instance
+                .create_surface(&window)
+                .expect("Failed to create a surface!")
+        };
+        // Return `window` so it is not dropped: dropping it invalidates `surface`.
+        (window, Some(instance), adapters, surface)
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    let (_window, instance, mut adapters, surface) = {
+        let (window, surface) = {
+            let window = wb.build(&event_loop).unwrap();
+            web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .body()
+                .unwrap()
+                .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
+                .unwrap();
+            let surface = back::Surface::from_raw_handle(&window);
+            (window, surface)
+        };
+
+        let adapters = surface.enumerate_adapters();
+        (window, None, adapters, surface)
+    };
+
+    for adapter in &adapters {
+        println!("{:?}", adapter.info);
+    }
+
+    let adapter = adapters.remove(0);
+
+    let mut context = Context::new(instance, surface, adapter);
+
+    //renderer.event_loop();
+
+    // It is important that the closure move captures the Renderer,
+    // otherwise it will not be dropped when the event loop exits.
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = winit::event_loop::ControlFlow::Wait;
+
+        match event {
+            winit::event::Event::WindowEvent { event, .. } => match event {
+                winit::event::WindowEvent::CloseRequested => {
+                    *control_flow = winit::event_loop::ControlFlow::Exit
+                }
+                winit::event::WindowEvent::KeyboardInput {
+                    input,
+                        
+                    ..
+                } => {
+                    context.process_event(to_event(input));
+                }
+
+                winit::event::WindowEvent::Resized(dims) => {
+                    println!("resized to {:?}", dims);
+                    context.resize(window::Extent2D {
+                        width: dims.width,
+                        height: dims.height,
+                    });
+                   
+                }
+                _ => {}
+            },
+            winit::event::Event::RedrawEventsCleared => {
+                context.draw();
+            }
+            _ => {}
         }
-    }
-    fn get_events(&self)->Vec<Event>{
-        unimplemented!()
-    }
-    fn draw(&mut self,draw_calls: Vec<DrawCall>){
-        unimplemented!()
-    }
+    });
 }
