@@ -4,9 +4,9 @@ pub struct Texture {}
 #[derive(Clone)]
 pub struct TextureId {}
 pub struct Model {
-    mesh: Vec<Vector3<f32>>,
-    uv: Vec<Vector2<f32>>,
-    indicies: Vec<u32>,
+    pub mesh: Vec<Vector3<f32>>,
+    pub uv: Vec<Vector2<f32>>,
+    pub indicies: Vec<u32>,
 }
 #[derive(Clone)]
 pub struct ModelId {}
