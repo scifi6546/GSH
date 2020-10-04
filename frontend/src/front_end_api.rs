@@ -20,14 +20,12 @@ extern crate gfx_backend_vulkan as back;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-
 use nalgebra::{Vector2, Vector3};
 use winit::event::KeyboardInput;
 mod front_end;
 use front_end::{DrawCall, Engine, Event};
-pub use front_end::{Model,Texture};
+pub use front_end::{Model, Texture};
 mod gpu;
-use gpu::{DEFAULT_SIZE,GPU};
 use gfx_hal::{
     buffer, command, format as f,
     format::ChannelType,
@@ -40,14 +38,25 @@ use gfx_hal::{
     queue::{QueueGroup, Submission},
     window,
 };
+use gpu::{ModelAllocation, TextureAllocation, DEFAULT_SIZE, GPU};
 use std::{
     borrow::Borrow,
     iter,
     mem::{self, ManuallyDrop},
     ptr,
 };
+#[derive(Clone)]
+pub struct ModelId {
+    id: usize,
+}
+#[derive(Clone)]
+pub struct TextureId {
+    id: usize,
+}
 struct Context<B: gfx_hal::Backend> {
     front_end: Engine,
+    mesh_allocation: Vec<ModelAllocation<B>>,
+    texture_allocation: Vec<TextureAllocation<B>>,
     gpu: GPU<B>,
 }
 impl<B: gfx_hal::Backend> Context<B> {
@@ -57,13 +66,26 @@ impl<B: gfx_hal::Backend> Context<B> {
         adapter: gfx_hal::adapter::Adapter<B>,
     ) -> Self {
         let mut gpu = GPU::new(instance, surface, adapter);
-        let (mut models, textures, engine_ctor) = Engine::new();
-        let model_allocation = gpu.load_models(&mut models);
-        let texture_allocation = gpu.load_textures(textures);
+        let (mut models, mut textures, engine_ctor) = Engine::new();
+        let mesh_allocation: Vec<ModelAllocation<B>> = models
+            .iter_mut()
+            .map(|model| gpu.load_verticies(&mut model.mesh))
+            .collect();
+        let texture_allocation: Vec<TextureAllocation<B>> = textures
+            .iter_mut()
+            .map(|texture| gpu.load_textures(&mut texture.image))
+            .collect();
         //TODO get model id
-
+        let model_ids = (0..mesh_allocation.len())
+            .map(|x| ModelId { id: x })
+            .collect();
+        let texture_ids = (0..texture_allocation.len())
+            .map(|x| TextureId { id: x })
+            .collect();
         Context {
-            front_end: engine_ctor(vec![], vec![]),
+            front_end: engine_ctor(model_ids, texture_ids),
+            mesh_allocation,
+            texture_allocation,
             gpu,
         }
     }
@@ -78,7 +100,19 @@ impl<B: gfx_hal::Backend> Context<B> {
         unimplemented!()
     }
     fn draw(&mut self) {
-        unimplemented!()
+        let draw_calls = self.front_end.get_draw_calls();
+        let models = draw_calls.iter().map(|draw|
+            match draw{
+                DrawCall::DrawModel{
+                    model,
+                    texture,
+                    ..
+                }=>(& self.mesh_allocation[model.id] as *const ModelAllocation<B>,&self.texture_allocation[texture.id] as *const TextureAllocation<B>)
+            }
+        ).collect();
+        unsafe{
+            self.gpu.draw_models(models);
+        }
     }
 }
 fn to_event(event: KeyboardInput) -> Event {

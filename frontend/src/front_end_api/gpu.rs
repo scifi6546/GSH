@@ -1,14 +1,14 @@
 const SHADER_ENTRY_NAME: &str = "main";
-use super::{Model,Texture};
+use super::{Model, Texture};
 use gfx_hal::{
     buffer, command, format as f,
-    format::ChannelType,
+    format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
     image as i, memory as m, pass,
     pass::Subpass,
     pool,
     prelude::*,
     pso,
-    pso::{ShaderStageFlags, VertexInputRate},
+    pso::{PipelineStage, ShaderStageFlags, VertexInputRate},
     queue::{QueueGroup, Submission},
     window,
 };
@@ -51,12 +51,17 @@ pub const DEFAULT_SIZE: window::Extent2D = window::Extent2D {
     width: 1024,
     height: 700,
 };
-pub struct ModelAllocation<B:gfx_hal::Backend> {
+pub struct ModelAllocation<B: gfx_hal::Backend> {
     vertex_buffer: ManuallyDrop<B::Buffer>,
     buffer_memory: ManuallyDrop<B::Memory>,
 }
-pub struct TextureAllocation {}
-
+pub struct TextureAllocation<B: gfx_hal::Backend> {
+    image_upload_buffer: ManuallyDrop<B::Buffer>,
+    image_logo: ManuallyDrop<B::Image>,
+    image_memory: ManuallyDrop<B::Memory>,
+    image_srv: ManuallyDrop<B::ImageView>,
+    sampler: ManuallyDrop<B::Sampler>,
+}
 
 impl<B: gfx_hal::Backend> GPU<B> {
     pub fn new(
@@ -383,26 +388,33 @@ impl<B: gfx_hal::Backend> GPU<B> {
             frame: 0,
         }
     }
-    pub fn load_models(&mut self, models: &mut Vec<Model>) -> ModelAllocation<B> {
-        let memory_types = self.adapter.physical_device.memory_properties().memory_types;
+    pub fn load_verticies(
+        &mut self,
+        verticies: &mut Vec<(Vector3<f32>, Vector2<f32>)>,
+    ) -> ModelAllocation<B> {
+        let memory_types = self
+            .adapter
+            .physical_device
+            .memory_properties()
+            .memory_types;
         let limits = self.adapter.physical_device.limits();
         println!("Memory types: {:?}", memory_types);
-        let mut vertex_memory = vec![];
-        vertex_memory.reserve(models.iter().map(|m|m.mesh.len()).fold(0,|s,l|s+l));
-        for model in models.iter_mut(){
-            vertex_memory.append(&mut (model.mesh));
-        }
+
         let non_coherent_alignment = limits.non_coherent_atom_size as u64;
 
-        let buffer_stride = mem::size_of::<Vector3<f32>>() as u64*3;
-        let buffer_len = vertex_memory.len() as u64 * buffer_stride;
+        let buffer_stride = mem::size_of::<Vector3<f32>>() as u64 * 3;
+        let buffer_len = verticies.len() as u64 * buffer_stride;
         assert_ne!(buffer_len, 0);
         let padded_buffer_len = ((buffer_len + non_coherent_alignment - 1)
             / non_coherent_alignment)
             * non_coherent_alignment;
 
         let mut vertex_buffer = ManuallyDrop::new(
-            unsafe { self.device.create_buffer(padded_buffer_len, buffer::Usage::VERTEX) }.unwrap(),
+            unsafe {
+                self.device
+                    .create_buffer(padded_buffer_len, buffer::Usage::VERTEX)
+            }
+            .unwrap(),
         );
 
         let buffer_req = unsafe { self.device.get_buffer_requirements(&vertex_buffer) };
@@ -421,14 +433,19 @@ impl<B: gfx_hal::Backend> GPU<B> {
             .into();
         // TODO: check transitions: read/write mapping and vertex buffer read
         let buffer_memory = unsafe {
-            let memory = self.device
+            let memory = self
+                .device
                 .allocate_memory(upload_type, buffer_req.size)
                 .unwrap();
             self.device
                 .bind_buffer_memory(&memory, 0, &mut vertex_buffer)
                 .unwrap();
             let mapping = self.device.map_memory(&memory, m::Segment::ALL).unwrap();
-            ptr::copy_nonoverlapping(vertex_memory.as_ptr() as *const u8, mapping, buffer_len as usize);
+            ptr::copy_nonoverlapping(
+                verticies.as_ptr() as *const u8,
+                mapping,
+                buffer_len as usize,
+            );
             self.device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
@@ -436,12 +453,394 @@ impl<B: gfx_hal::Backend> GPU<B> {
             ManuallyDrop::new(memory)
         };
 
-        ModelAllocation{
+        ModelAllocation {
             vertex_buffer,
             buffer_memory,
         }
     }
-    pub fn load_textures(&mut self, textures: Vec<Texture>) -> TextureAllocation {
-        unimplemented!()
+    fn wait_fence(&mut self) -> &mut B::CommandBuffer {
+        let frame_idx = self.frame as usize % self.frames_in_flight;
+        let fence = &self.submission_complete_fences[frame_idx];
+        unsafe {
+            self.device
+                .wait_for_fence(fence, !0)
+                .expect("Failed to wait for fence");
+            self.device
+                .reset_fence(fence)
+                .expect("Failed to reset fence");
+            self.cmd_pools[frame_idx].reset(false);
+        }
+        return &mut self.cmd_buffers[frame_idx];
+    }
+    unsafe fn bind_verticies(model: *const ModelAllocation<B>,command_buffer: &mut B::CommandBuffer) {
+            command_buffer.bind_vertex_buffers(
+                0,
+                iter::once((&*(*model).vertex_buffer, buffer::SubRange::WHOLE)),
+            );
+    }
+    pub fn load_textures(&mut self, image: &mut image::RgbaImage) -> TextureAllocation<B> {
+        let limits = self.adapter.physical_device.limits();
+        let non_coherent_alignment = limits.non_coherent_atom_size as u64;
+        println!("loaded dimensions: {} {}", image.width(), image.height());
+        let kind = i::Kind::D2(image.width() as i::Size, image.height() as i::Size, 1, 1);
+        let row_alignment_mask = limits.optimal_buffer_copy_pitch_alignment as u32 - 1;
+        let image_stride = 4usize;
+        let row_pitch =
+            (image.width() * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
+        let upload_size = (image.height() * row_pitch) as u64;
+        let padded_upload_size = ((upload_size + non_coherent_alignment - 1)
+            / non_coherent_alignment)
+            * non_coherent_alignment;
+
+        let mut image_upload_buffer = ManuallyDrop::new(
+            unsafe {
+                self.device
+                    .create_buffer(padded_upload_size, buffer::Usage::TRANSFER_SRC)
+            }
+            .unwrap(),
+        );
+        let buffer_req = unsafe { self.device.get_buffer_requirements(&image_upload_buffer) };
+        let memory_types = self
+            .adapter
+            .physical_device
+            .memory_properties()
+            .memory_types;
+        let upload_type = memory_types
+            .iter()
+            .enumerate()
+            .position(|(id, mem_type)| {
+                // type_mask is a bit field where each bit represents a memory type. If the bit is set
+                // to 1 it means we can use that type for our buffer. So this code finds the first
+                // memory type that has a `1` (or, is allowed), and is visible to the CPU.
+                buffer_req.type_mask & (1 << id) != 0
+                    && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
+            })
+            .unwrap()
+            .into();
+        let image_mem_reqs = unsafe { self.device.get_buffer_requirements(&image_upload_buffer) };
+        // copy image data into staging buffer
+        let image_upload_memory = unsafe {
+            let memory = self
+                .device
+                .allocate_memory(upload_type, image_mem_reqs.size)
+                .unwrap();
+            self.device
+                .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
+                .unwrap();
+            let mapping = self.device.map_memory(&memory, m::Segment::ALL).unwrap();
+            for y in 0..image.height() as usize {
+                let row = &(**image)[y * (image.width() as usize) * image_stride
+                    ..(y + 1) * (image.width() as usize) * image_stride];
+                ptr::copy_nonoverlapping(
+                    row.as_ptr(),
+                    mapping.offset(y as isize * row_pitch as isize),
+                    image.width() as usize * image_stride,
+                );
+            }
+            self.device
+                .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
+                .unwrap();
+            self.device.unmap_memory(&memory);
+            ManuallyDrop::new(memory)
+        };
+        let mut image_logo = ManuallyDrop::new(
+            unsafe {
+                self.device.create_image(
+                    kind,
+                    1,
+                    ColorFormat::SELF,
+                    i::Tiling::Optimal,
+                    i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                    i::ViewCapabilities::empty(),
+                )
+            }
+            .unwrap(),
+        );
+        let image_req = unsafe { self.device.get_image_requirements(&image_logo) };
+
+        let device_type = memory_types
+            .iter()
+            .enumerate()
+            .position(|(id, memory_type)| {
+                image_req.type_mask & (1 << id) != 0
+                    && memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
+            })
+            .unwrap()
+            .into();
+        let image_memory = ManuallyDrop::new(
+            unsafe { self.device.allocate_memory(device_type, image_req.size) }.unwrap(),
+        );
+
+        unsafe {
+            self.device
+                .bind_image_memory(&image_memory, 0, &mut image_logo)
+        }
+        .unwrap();
+        let image_srv = ManuallyDrop::new(
+            unsafe {
+                self.device.create_image_view(
+                    &image_logo,
+                    i::ViewKind::D2,
+                    ColorFormat::SELF,
+                    Swizzle::NO,
+                    i::SubresourceRange {
+                        aspects: f::Aspects::COLOR,
+                        ..Default::default()
+                    },
+                )
+            }
+            .unwrap(),
+        );
+
+        let sampler = ManuallyDrop::new(
+            unsafe {
+                self.device
+                    .create_sampler(&i::SamplerDesc::new(i::Filter::Linear, i::WrapMode::Clamp))
+            }
+            .expect("Can't create sampler"),
+        );
+
+        unsafe {
+            self.device.write_descriptor_sets(vec![
+                pso::DescriptorSetWrite {
+                    set: &(self.desc_set),
+                    binding: 0,
+                    array_offset: 0,
+                    descriptors: Some(pso::Descriptor::Image(
+                        &*image_srv,
+                        i::Layout::ShaderReadOnlyOptimal,
+                    )),
+                },
+                pso::DescriptorSetWrite {
+                    set: &(self.desc_set),
+                    binding: 1,
+                    array_offset: 0,
+                    descriptors: Some(pso::Descriptor::Sampler(&*sampler)),
+                },
+            ]);
+        }
+
+        //buffering texture
+
+        unsafe {
+            let mut cmd_buffer = self.wait_fence();
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
+
+            let image_barrier = m::Barrier::Image {
+                states: (i::Access::empty(), i::Layout::Undefined)
+                    ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                target: &*image_logo,
+                families: None,
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    ..Default::default()
+                },
+            };
+
+            cmd_buffer.pipeline_barrier(
+                PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
+                m::Dependencies::empty(),
+                &[image_barrier],
+            );
+
+            cmd_buffer.copy_buffer_to_image(
+                &image_upload_buffer,
+                &image_logo,
+                i::Layout::TransferDstOptimal,
+                &[command::BufferImageCopy {
+                    buffer_offset: 0,
+                    buffer_width: row_pitch / (image_stride as u32),
+                    buffer_height: image.height() as u32,
+                    image_layers: i::SubresourceLayers {
+                        aspects: f::Aspects::COLOR,
+                        level: 0,
+                        layers: 0..1,
+                    },
+                    image_offset: i::Offset { x: 0, y: 0, z: 0 },
+                    image_extent: i::Extent {
+                        width: image.width(),
+                        height: image.height(),
+                        depth: 1,
+                    },
+                }],
+            );
+
+            let image_barrier = m::Barrier::Image {
+                states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
+                    ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+                target: &*image_logo,
+                families: None,
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    ..Default::default()
+                },
+            };
+            cmd_buffer.pipeline_barrier(
+                PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
+                m::Dependencies::empty(),
+                &[image_barrier],
+            );
+
+            cmd_buffer.finish();
+
+            //self.queue_group.queues[0]
+            //    .submit_without_semaphores(Some(&cmd_buffer), Some(&mut copy_fence));
+
+            //I need to wait for the fence somehow opps
+            //todo!("Wait for fence. That might be a bug");
+        }
+        TextureAllocation {
+            image_upload_buffer,
+            image_logo,
+            image_memory,
+            image_srv,
+            sampler,
+        }
+    }
+    pub unsafe fn bind_texture(texture: *const TextureAllocation<B>,device: &B::Device,descriptor_set: &B::DescriptorSet){
+        unsafe {
+            device.write_descriptor_sets(vec![
+                pso::DescriptorSetWrite {
+                    set: descriptor_set,
+                    binding: 0,
+                    array_offset: 0,
+                    descriptors: Some(pso::Descriptor::Image(
+                        &*((*texture).image_srv),
+                        i::Layout::ShaderReadOnlyOptimal,
+                    )),
+                },
+                pso::DescriptorSetWrite {
+                    set: descriptor_set,
+                    binding: 1,
+                    array_offset: 0,
+                    descriptors: Some(pso::Descriptor::Sampler(&*(*texture).sampler)),
+                },
+            ]);
+        }
+    }
+    fn recreate_swapchain(&mut self){
+        let caps = self.surface.capabilities(&self.adapter.physical_device);
+        let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
+        println!("{:?}", swap_config);
+        let extent = swap_config.extent.to_extent();
+
+        unsafe {
+            self.surface
+                .configure_swapchain(&self.device, swap_config)
+                .expect("Can't create swapchain");
+        }
+
+        self.viewport.rect.w = extent.width as _;
+        self.viewport.rect.h = extent.height as _;
+    }
+    fn draw(&mut self,draw_calls: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
+        let surface_image = unsafe {
+            match self.surface.acquire_image(!0) {
+                Ok((image, _)) => image,
+                Err(_) => {
+                    self.recreate_swapchain();
+                    return;
+                }
+            }
+        };
+
+        let framebuffer = unsafe {
+            self.device
+                .create_framebuffer(
+                    &self.render_pass,
+                    iter::once(surface_image.borrow()),
+                    i::Extent {
+                        width: self.dimensions.width,
+                        height: self.dimensions.height,
+                        depth: 1,
+                    },
+                )
+                .unwrap()
+        };
+
+        // Compute index into our resource ring buffers based on the frame number
+        // and number of frames in flight. Pay close attention to where this index is needed
+        // versus when the swapchain image index we got from acquire_image is needed.
+        let frame_idx = self.frame as usize % self.frames_in_flight;
+        // Wait for the fence of the previous submission of this frame and reset it; ensures we are
+        // submitting only up to maximum number of frames_in_flight if we are submitting faster than
+        // the gpu can keep up with. This would also guarantee that any resources which need to be
+        // updated with a CPU->GPU data copy are not in use by the GPU, so we can perform those updates.
+        // In this case there are none to be done, however.
+        unsafe {
+            let fence = &self.submission_complete_fences[frame_idx];
+            self.device
+                .wait_for_fence(fence, !0)
+                .expect("Failed to wait for fence");
+            self.device
+                .reset_fence(fence)
+                .expect("Failed to reset fence");
+            self.cmd_pools[frame_idx].reset(false);
+        }
+
+        // Rendering
+        let cmd_buffer = &mut self.cmd_buffers[frame_idx];
+        unsafe {
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
+
+            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
+            //cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.bind_graphics_pipeline(&self.pipeline);
+            cmd_buffer.bind_graphics_descriptor_sets(
+                &self.pipeline_layout,
+                0,
+                iter::once(&self.desc_set),
+                &[],
+            );
+
+            cmd_buffer.begin_render_pass(
+                &self.render_pass,
+                &framebuffer,
+                self.viewport.rect,
+                &[command::ClearValue {
+                    color: command::ClearColor {
+                        float32: [0.8, 0.8, 0.8, 1.0],
+                    },
+                }],
+                command::SubpassContents::Inline,
+            );
+            let cmd_ptr = (cmd_buffer) as *mut B::CommandBuffer;
+            for (m,t) in draw_calls.iter(){
+                Self::bind_texture(*t,&self.device,&self.desc_set);
+                Self::bind_verticies(*m,cmd_buffer);
+                (*cmd_ptr).draw(0..6, 0..1);
+            }
+            cmd_buffer.end_render_pass();
+            cmd_buffer.finish();
+
+            let submission = Submission {
+                command_buffers: iter::once(&*cmd_buffer),
+                wait_semaphores: None,
+                signal_semaphores: iter::once(&self.submission_complete_semaphores[frame_idx]),
+            };
+            self.queue_group.queues[0].submit(
+                submission,
+                Some(&self.submission_complete_fences[frame_idx]),
+            );
+
+            // present frame
+            let result = self.queue_group.queues[0].present(
+                &mut self.surface,
+                surface_image,
+                Some(&self.submission_complete_semaphores[frame_idx]),
+            );
+
+            self.device.destroy_framebuffer(framebuffer);
+
+            if result.is_err() {
+                self.recreate_swapchain();
+            }
+        }
+
+        // Increment our frame
+        self.frame += 1;
+    }
+    pub unsafe fn draw_models(&mut self,draw: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
+        let calls = draw.iter().map(|(m,t)|{});
     }
 }
