@@ -45,11 +45,11 @@ use std::{
     mem::{self, ManuallyDrop},
     ptr,
 };
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct ModelId {
     id: usize,
 }
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct TextureId {
     id: usize,
 }
@@ -110,9 +110,12 @@ impl<B: gfx_hal::Backend> Context<B> {
                 }=>(& self.mesh_allocation[model.id] as *const ModelAllocation<B>,&self.texture_allocation[texture.id] as *const TextureAllocation<B>)
             }
         ).collect();
+
+        
         unsafe{
             self.gpu.draw_models(models);
         }
+
     }
 }
 fn to_event(event: KeyboardInput) -> Event {

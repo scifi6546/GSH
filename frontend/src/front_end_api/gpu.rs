@@ -458,7 +458,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             buffer_memory,
         }
     }
-    fn wait_fence(&mut self) -> &mut B::CommandBuffer {
+    fn wait_fence(&mut self) -> (&mut B::CommandBuffer,&B::Fence,&mut gfx_hal::queue::family::QueueGroup<B>) {
         let frame_idx = self.frame as usize % self.frames_in_flight;
         let fence = &self.submission_complete_fences[frame_idx];
         unsafe {
@@ -470,7 +470,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
-        return &mut self.cmd_buffers[frame_idx];
+        return (&mut self.cmd_buffers[frame_idx],fence,&mut self.queue_group);
     }
     unsafe fn bind_verticies(model: *const ModelAllocation<B>,command_buffer: &mut B::CommandBuffer) {
             command_buffer.bind_vertex_buffers(
@@ -623,7 +623,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         //buffering texture
 
         unsafe {
-            let mut cmd_buffer = self.wait_fence();
+            let (mut cmd_buffer,mut fence,mut queue_group) = self.wait_fence();
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             let image_barrier = m::Barrier::Image {
@@ -683,8 +683,8 @@ impl<B: gfx_hal::Backend> GPU<B> {
 
             cmd_buffer.finish();
 
-            //self.queue_group.queues[0]
-            //    .submit_without_semaphores(Some(&cmd_buffer), Some(&mut copy_fence));
+            queue_group.queues[0]
+                .submit_without_semaphores(Some(&cmd_buffer), Some(&fence));
 
             //I need to wait for the fence somehow opps
             //todo!("Wait for fence. That might be a bug");
@@ -734,6 +734,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         self.viewport.rect.h = extent.height as _;
     }
     fn draw(&mut self,draw_calls: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
+        println!("starting to draw");
         let surface_image = unsafe {
             match self.surface.acquire_image(!0) {
                 Ok((image, _)) => image,
@@ -743,7 +744,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 }
             }
         };
-
+        println!("got surface");
         let framebuffer = unsafe {
             self.device
                 .create_framebuffer(
@@ -772,12 +773,13 @@ impl<B: gfx_hal::Backend> GPU<B> {
             self.device
                 .wait_for_fence(fence, !0)
                 .expect("Failed to wait for fence");
+            println!("waited for fence");
             self.device
                 .reset_fence(fence)
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
-
+        println!("got fence");
         // Rendering
         let cmd_buffer = &mut self.cmd_buffers[frame_idx];
         unsafe {
@@ -806,6 +808,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             );
             let cmd_ptr = (cmd_buffer) as *mut B::CommandBuffer;
             for (m,t) in draw_calls.iter(){
+                println!("drawing: {:?} {:?}",m,t);
                 Self::bind_texture(*t,&self.device,&self.desc_set);
                 Self::bind_verticies(*m,cmd_buffer);
                 (*cmd_ptr).draw(0..6, 0..1);
@@ -841,6 +844,6 @@ impl<B: gfx_hal::Backend> GPU<B> {
         self.frame += 1;
     }
     pub unsafe fn draw_models(&mut self,draw: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
-        let calls = draw.iter().map(|(m,t)|{});
+        self.draw(draw)
     }
 }

@@ -12,7 +12,7 @@ pub struct Model {
     pub mesh: Vec<(Vector3<f32>, Vector2<f32>)>,
     pub indicies: Vec<u32>,
 }
-
+#[derive(Debug)]
 pub enum DrawCall {
     DrawModel {
         model: ModelId,

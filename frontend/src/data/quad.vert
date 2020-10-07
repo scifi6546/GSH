@@ -3,7 +3,7 @@
 
 layout(constant_id = 0) const float scale = 1.0f;
 
-layout(location = 0) in vec2 a_pos;
+layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec2 a_uv;
 layout(location = 0) out vec2 v_uv;
 
@@ -13,5 +13,5 @@ layout(location = 0) out vec2 v_uv;
 
 void main() {
     v_uv = a_uv;
-    gl_Position = vec4(scale * a_pos, 0.0, 1.0);
+    gl_Position = vec4(scale * a_pos, 1.0);
 }
