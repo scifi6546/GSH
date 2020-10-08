@@ -21,7 +21,7 @@ extern crate gfx_backend_vulkan as back;
 use wasm_bindgen::prelude::*;
 
 use nalgebra::{Vector2, Vector3};
-use winit::event::KeyboardInput;
+use winit::event::{KeyboardInput,VirtualKeyCode};
 mod front_end;
 use front_end::{DrawCall, Engine, Event};
 pub use front_end::{Model, Texture};
@@ -69,7 +69,7 @@ impl<B: gfx_hal::Backend> Context<B> {
         let (mut models, mut textures, engine_ctor) = Engine::new();
         let mesh_allocation: Vec<ModelAllocation<B>> = models
             .iter_mut()
-            .map(|model| gpu.load_verticies(&mut model.mesh))
+            .map(|model| gpu.load_verticies(&mut model.mesh,&model.indicies))
             .collect();
         let texture_allocation: Vec<TextureAllocation<B>> = textures
             .iter_mut()
@@ -90,7 +90,7 @@ impl<B: gfx_hal::Backend> Context<B> {
         }
     }
     fn process_event(&mut self, event: Event) {
-        unimplemented!()
+        self.front_end.process_event(event);
     }
     fn event_loop(&mut self, event: Vec<Event>) {}
     fn get_events(&self) -> Vec<Event> {
@@ -118,8 +118,53 @@ impl<B: gfx_hal::Backend> Context<B> {
 
     }
 }
-fn to_event(event: KeyboardInput) -> Event {
-    unimplemented!()
+fn to_event(keyboard: KeyboardInput) -> Event {
+    if let Some(event) = keyboard.virtual_keycode{
+        use winit::event::VirtualKeyCode;
+        match event{
+            VirtualKeyCode::Key1=>Event::RegularKey('1'),
+            VirtualKeyCode::Key2=>Event::RegularKey('2'),
+            VirtualKeyCode::Key3=>Event::RegularKey('3'),
+            VirtualKeyCode::Key4=>Event::RegularKey('4'),
+            VirtualKeyCode::Key5=>Event::RegularKey('5'),
+            VirtualKeyCode::Key6=>Event::RegularKey('6'),
+            VirtualKeyCode::Key7=>Event::RegularKey('7'),
+            VirtualKeyCode::Key8=>Event::RegularKey('8'),
+            VirtualKeyCode::Key9=>Event::RegularKey('9'),
+            VirtualKeyCode::Key0=>Event::RegularKey('0'),
+            VirtualKeyCode::A=>Event::RegularKey('a'),
+            VirtualKeyCode::B=>Event::RegularKey('b'),
+            VirtualKeyCode::C=>Event::RegularKey('c'),
+            VirtualKeyCode::D=>Event::RegularKey('d'),
+            VirtualKeyCode::E=>Event::RegularKey('e'),
+            VirtualKeyCode::F=>Event::RegularKey('f'),
+            VirtualKeyCode::G=>Event::RegularKey('g'),
+            VirtualKeyCode::H=>Event::RegularKey('h'),
+            VirtualKeyCode::I=>Event::RegularKey('i'),
+            VirtualKeyCode::J=>Event::RegularKey('j'),
+            VirtualKeyCode::K=>Event::RegularKey('k'),
+            VirtualKeyCode::L=>Event::RegularKey('l'),
+            VirtualKeyCode::M=>Event::RegularKey('m'),
+            VirtualKeyCode::N=>Event::RegularKey('n'),
+            VirtualKeyCode::O=>Event::RegularKey('o'),
+            VirtualKeyCode::P=>Event::RegularKey('p'),
+            VirtualKeyCode::Q=>Event::RegularKey('q'),
+            VirtualKeyCode::R=>Event::RegularKey('r'),
+            VirtualKeyCode::S=>Event::RegularKey('s'),
+            VirtualKeyCode::T=>Event::RegularKey('t'),
+            VirtualKeyCode::U=>Event::RegularKey('u'),
+            VirtualKeyCode::V=>Event::RegularKey('v'),
+            VirtualKeyCode::W=>Event::RegularKey('w'),
+            VirtualKeyCode::X=>Event::RegularKey('x'),
+            VirtualKeyCode::Y=>Event::RegularKey('y'),
+            VirtualKeyCode::Z=>Event::RegularKey('z'),
+            _=>Event::Unknown,
+        }
+    }else{
+        Event::Unknown
+    }
+    
+    
 }
 pub fn build_vulkan_context() {
     #[cfg(target_arch = "wasm32")]

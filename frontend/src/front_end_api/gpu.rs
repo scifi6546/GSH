@@ -20,7 +20,7 @@ use std::{
     ptr,
 };
 pub struct GPU<B: gfx_hal::Backend> {
-    instance: Option<B::Instance>,
+    
     device: B::Device,
     queue_group: QueueGroup<B>,
     desc_pool: ManuallyDrop<B::DescriptorPool>,
@@ -54,6 +54,7 @@ pub const DEFAULT_SIZE: window::Extent2D = window::Extent2D {
 pub struct ModelAllocation<B: gfx_hal::Backend> {
     vertex_buffer: ManuallyDrop<B::Buffer>,
     buffer_memory: ManuallyDrop<B::Memory>,
+    vertex_count:u32,
 }
 pub struct TextureAllocation<B: gfx_hal::Backend> {
     image_upload_buffer: ManuallyDrop<B::Buffer>,
@@ -358,7 +359,6 @@ impl<B: gfx_hal::Backend> GPU<B> {
         };
 
         GPU {
-            instance,
             device,
             queue_group,
             desc_pool,
@@ -391,7 +391,13 @@ impl<B: gfx_hal::Backend> GPU<B> {
     pub fn load_verticies(
         &mut self,
         verticies: &mut Vec<(Vector3<f32>, Vector2<f32>)>,
+        indicies: &Vec<u32>
     ) -> ModelAllocation<B> {
+        println!("size: {} should be: {}",std::mem::size_of::<(Vector3<f32>, Vector2<f32>)>(),std::mem::size_of::<f32>()*(3+2));
+        
+        for (m,u) in verticies.iter(){
+            println!("loading verticies: {} {}",m,u);
+        }
         let memory_types = self
             .adapter
             .physical_device
@@ -456,6 +462,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         ModelAllocation {
             vertex_buffer,
             buffer_memory,
+            vertex_count: indicies.len() as u32,
         }
     }
     fn wait_fence(&mut self) -> (&mut B::CommandBuffer,&B::Fence,&mut gfx_hal::queue::family::QueueGroup<B>) {
@@ -733,8 +740,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         self.viewport.rect.w = extent.width as _;
         self.viewport.rect.h = extent.height as _;
     }
-    fn draw(&mut self,draw_calls: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
-        println!("starting to draw");
+    pub fn draw_models(&mut self,draw_calls: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
         let surface_image = unsafe {
             match self.surface.acquire_image(!0) {
                 Ok((image, _)) => image,
@@ -744,7 +750,6 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 }
             }
         };
-        println!("got surface");
         let framebuffer = unsafe {
             self.device
                 .create_framebuffer(
@@ -773,13 +778,11 @@ impl<B: gfx_hal::Backend> GPU<B> {
             self.device
                 .wait_for_fence(fence, !0)
                 .expect("Failed to wait for fence");
-            println!("waited for fence");
             self.device
                 .reset_fence(fence)
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
-        println!("got fence");
         // Rendering
         let cmd_buffer = &mut self.cmd_buffers[frame_idx];
         unsafe {
@@ -808,10 +811,9 @@ impl<B: gfx_hal::Backend> GPU<B> {
             );
             let cmd_ptr = (cmd_buffer) as *mut B::CommandBuffer;
             for (m,t) in draw_calls.iter(){
-                println!("drawing: {:?} {:?}",m,t);
                 Self::bind_texture(*t,&self.device,&self.desc_set);
                 Self::bind_verticies(*m,cmd_buffer);
-                (*cmd_ptr).draw(0..6, 0..1);
+                (*cmd_ptr).draw(0..(**m).vertex_count, 0..1);
             }
             cmd_buffer.end_render_pass();
             cmd_buffer.finish();
@@ -842,8 +844,5 @@ impl<B: gfx_hal::Backend> GPU<B> {
 
         // Increment our frame
         self.frame += 1;
-    }
-    pub unsafe fn draw_models(&mut self,draw: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
-        self.draw(draw)
     }
 }
