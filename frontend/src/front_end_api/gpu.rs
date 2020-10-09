@@ -1,5 +1,4 @@
 const SHADER_ENTRY_NAME: &str = "main";
-use super::{Model, Texture};
 use gfx_hal::{
     buffer, command, format as f,
     format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
@@ -391,7 +390,6 @@ impl<B: gfx_hal::Backend> GPU<B> {
     pub fn load_verticies(
         &mut self,
         verticies: &mut Vec<(Vector3<f32>, Vector2<f32>)>,
-        indicies: &Vec<u32>
     ) -> ModelAllocation<B> {
         assert_eq!(std::mem::size_of::<(Vector3<f32>, Vector2<f32>)>(),std::mem::size_of::<f32>()*5);
         for (m,u) in verticies.iter(){

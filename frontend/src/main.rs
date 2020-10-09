@@ -8,12 +8,7 @@ pub fn wasm_main() {
     main();
 }
 mod front_end_api;
-mod renderer;
-mod text_render;
 use front_end_api::build_vulkan_context;
-use gfx_hal::{prelude::*, window};
-use renderer::Renderer;
-pub use renderer::Updater;
 
 fn main() {
     build_vulkan_context();

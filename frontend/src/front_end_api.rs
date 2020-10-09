@@ -69,7 +69,7 @@ impl<B: gfx_hal::Backend> Context<B> {
         let (mut models, mut textures, engine_ctor) = Engine::new();
         let mesh_allocation: Vec<ModelAllocation<B>> = models
             .iter_mut()
-            .map(|model| gpu.load_verticies(&mut model.mesh,&model.indicies))
+            .map(|model| gpu.load_verticies(&mut model.mesh))
             .collect();
         let texture_allocation: Vec<TextureAllocation<B>> = textures
             .iter_mut()

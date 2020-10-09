@@ -22,6 +22,8 @@ pub enum DrawCall {
     },
 }
 //any key that is not a letter
+#[allow(dead_code)]
+#[derive(Debug)]
 pub enum SpecialKey{
     Escape,
     F1,
@@ -153,7 +155,7 @@ pub enum SpecialKey{
 }
 pub enum Event {
     RegularKey(char),
-    SpecialKey,
+    SpecialKey(SpecialKey),
     Unknown
 }
 //Trait to be used by terminal horizontal split, vertiocal split and regular terminal will
@@ -222,6 +224,7 @@ impl Engine {
     pub fn process_event(&mut self, event: Event) {
         match event{
             Event::RegularKey(c)=>println!("pressed: {}",c),
+            Event::SpecialKey(k)=>println!("special key {:?}",k),
             _=>()
         }
     }
