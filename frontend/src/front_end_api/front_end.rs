@@ -176,20 +176,34 @@ impl Engine {
         Vec<Texture>,
         Box<dyn Fn(Vec<ModelId>, Vec<TextureId>) -> Engine>,
     ) {
+        let mesh =  vec![
+            (Vector3::new(-1.0,-1.0, 0.0),Vector2::new(1.0, 1.0)),
+            (Vector3::new( 1.0,-1.0, 0.0),Vector2::new(1.0, 0.0)),
+            (Vector3::new( 1.0, 1.0, 0.0),Vector2::new(1.0, 1.0)),];
+        unsafe{
+            let m_ptr = mesh.as_ptr() as *const f32;
+
+            for i in 0..3{
+                print!("(");
+                for j in 0..5{
+                    print!("{}, ",*(m_ptr.offset(i*5+j)));
+                }
+                println!(")");
+                
+            }
+        }
         let model = Model {
             #[rustfmt::skip]
-            mesh: vec![
-                (Vector3::new(-1.0,-1.0, 0.0),Vector2::new(0.0, 1.0)),
-                (Vector3::new( 1.0,-1.0, 0.0),Vector2::new(1.0, 1.0)),
-                (Vector3::new( 1.0, 1.0, 0.0),Vector2::new(1.0, 0.0)),
-                (Vector3::new(-1.0, 1.0, 0.0),Vector2::new(0.0, 0.0)),
-            ],
+            mesh,
+                //(Vector3::new(-1.0, 1.0, 0.0),Vector2::new(0.0, 0.0)),
+            
+            
             indicies: vec![0,1,2,0,2,3],
         };
         (
             vec![model],
             vec![Texture {
-                image: image::RgbaImage::from_pixel(100, 100, Rgba([255,255,255,255])),
+                image: image::RgbaImage::from_pixel(100, 100, Rgba([0,0,0,255])),
             }],
             Box::new(|model, textures| Engine {
                 box_mesh: model[0].clone(),

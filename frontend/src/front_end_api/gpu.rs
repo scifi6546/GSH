@@ -393,10 +393,9 @@ impl<B: gfx_hal::Backend> GPU<B> {
         verticies: &mut Vec<(Vector3<f32>, Vector2<f32>)>,
         indicies: &Vec<u32>
     ) -> ModelAllocation<B> {
-        println!("size: {} should be: {}",std::mem::size_of::<(Vector3<f32>, Vector2<f32>)>(),std::mem::size_of::<f32>()*(3+2));
-        
+        assert_eq!(std::mem::size_of::<(Vector3<f32>, Vector2<f32>)>(),std::mem::size_of::<f32>()*5);
         for (m,u) in verticies.iter(){
-            println!("loading verticies: {} {}",m,u);
+            println!("loading verticies: ({} {} {}) ({} {})",m.x,m.y,m.z,u.x,u.y);
         }
         let memory_types = self
             .adapter
@@ -408,7 +407,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
 
         let non_coherent_alignment = limits.non_coherent_atom_size as u64;
 
-        let buffer_stride = mem::size_of::<Vector3<f32>>() as u64 * 3;
+        let buffer_stride = mem::size_of::<(Vector3<f32>, Vector2<f32>)>() as u64;
         let buffer_len = verticies.len() as u64 * buffer_stride;
         assert_ne!(buffer_len, 0);
         let padded_buffer_len = ((buffer_len + non_coherent_alignment - 1)
@@ -462,7 +461,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         ModelAllocation {
             vertex_buffer,
             buffer_memory,
-            vertex_count: indicies.len() as u32,
+            vertex_count: verticies.len() as u32,
         }
     }
     fn wait_fence(&mut self) -> (&mut B::CommandBuffer,&B::Fence,&mut gfx_hal::queue::family::QueueGroup<B>) {
