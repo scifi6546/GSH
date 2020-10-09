@@ -287,7 +287,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
 
                 let vertex_buffers = vec![pso::VertexBufferDesc {
                     binding: 0,
-                    stride: mem::size_of::<f32>() as u32 * 3,
+                    stride: mem::size_of::<f32>() as u32 * 5,
                     rate: VertexInputRate::Vertex,
                 }];
 
@@ -305,7 +305,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                         binding: 0,
                         element: pso::Element {
                             format: f::Format::Rg32Sfloat,
-                            offset: 8,
+                            offset: std::mem::size_of::<f32>() as u32 *3,
                         },
                     },
                 ];
