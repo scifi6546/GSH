@@ -19,9 +19,9 @@ use std::{
     ptr,
 };
 pub struct GPU<B: gfx_hal::Backend> {
-    
     device: B::Device,
     queue_group: QueueGroup<B>,
+    #[allow(dead_code)]
     desc_pool: ManuallyDrop<B::DescriptorPool>,
     surface: ManuallyDrop<B::Surface>,
     adapter: gfx_hal::adapter::Adapter<B>,
@@ -32,6 +32,7 @@ pub struct GPU<B: gfx_hal::Backend> {
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
     desc_set: B::DescriptorSet,
+    #[allow(dead_code)]
     set_layout: ManuallyDrop<B::DescriptorSetLayout>,
     submission_complete_semaphores: Vec<B::Semaphore>,
     submission_complete_fences: Vec<B::Fence>,
@@ -52,26 +53,29 @@ pub const DEFAULT_SIZE: window::Extent2D = window::Extent2D {
 };
 pub struct ModelAllocation<B: gfx_hal::Backend> {
     vertex_buffer: ManuallyDrop<B::Buffer>,
+    #[allow(dead_code)]
     buffer_memory: ManuallyDrop<B::Memory>,
-    vertex_count:u32,
+    vertex_count: u32,
 }
 pub struct TextureAllocation<B: gfx_hal::Backend> {
+    #[allow(dead_code)]
     image_upload_buffer: ManuallyDrop<B::Buffer>,
+    #[allow(dead_code)]
     image_logo: ManuallyDrop<B::Image>,
+    #[allow(dead_code)]
     image_memory: ManuallyDrop<B::Memory>,
+    #[allow(dead_code)]
+    image_upload_memory: ManuallyDrop<B::Memory>,
     image_srv: ManuallyDrop<B::ImageView>,
     sampler: ManuallyDrop<B::Sampler>,
 }
 
 impl<B: gfx_hal::Backend> GPU<B> {
     pub fn new(
-        instance: Option<B::Instance>,
+        _: Option<B::Instance>,
         mut surface: B::Surface,
         adapter: gfx_hal::adapter::Adapter<B>,
     ) -> Self {
-        let memory_types = adapter.physical_device.memory_properties().memory_types;
-        let limits = adapter.physical_device.limits();
-
         // Build a new device and associated command queues
         let family = adapter
             .queue_families
@@ -86,7 +90,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .open(&[(family, &[1.0])], gfx_hal::Features::empty())
                 .unwrap()
         };
-        let mut queue_group = gpu.queue_groups.pop().unwrap();
+        let queue_group = gpu.queue_groups.pop().unwrap();
         let device = gpu.device;
 
         let command_pool = unsafe {
@@ -304,7 +308,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                         binding: 0,
                         element: pso::Element {
                             format: f::Format::Rg32Sfloat,
-                            offset: std::mem::size_of::<f32>() as u32 *3,
+                            offset: std::mem::size_of::<f32>() as u32 * 3,
                         },
                     },
                 ];
@@ -391,9 +395,15 @@ impl<B: gfx_hal::Backend> GPU<B> {
         &mut self,
         verticies: &mut Vec<(Vector3<f32>, Vector2<f32>)>,
     ) -> ModelAllocation<B> {
-        assert_eq!(std::mem::size_of::<(Vector3<f32>, Vector2<f32>)>(),std::mem::size_of::<f32>()*5);
-        for (m,u) in verticies.iter(){
-            println!("loading verticies: ({} {} {}) ({} {})",m.x,m.y,m.z,u.x,u.y);
+        assert_eq!(
+            std::mem::size_of::<(Vector3<f32>, Vector2<f32>)>(),
+            std::mem::size_of::<f32>() * 5
+        );
+        for (m, u) in verticies.iter() {
+            println!(
+                "loading verticies: ({} {} {}) ({} {})",
+                m.x, m.y, m.z, u.x, u.y
+            );
         }
         let memory_types = self
             .adapter
@@ -462,7 +472,13 @@ impl<B: gfx_hal::Backend> GPU<B> {
             vertex_count: verticies.len() as u32,
         }
     }
-    fn wait_fence(&mut self) -> (&mut B::CommandBuffer,&B::Fence,&mut gfx_hal::queue::family::QueueGroup<B>) {
+    fn wait_fence(
+        &mut self,
+    ) -> (
+        &mut B::CommandBuffer,
+        &B::Fence,
+        &mut gfx_hal::queue::family::QueueGroup<B>,
+    ) {
         let frame_idx = self.frame as usize % self.frames_in_flight;
         let fence = &self.submission_complete_fences[frame_idx];
         unsafe {
@@ -474,13 +490,20 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
-        return (&mut self.cmd_buffers[frame_idx],fence,&mut self.queue_group);
+        return (
+            &mut self.cmd_buffers[frame_idx],
+            fence,
+            &mut self.queue_group,
+        );
     }
-    unsafe fn bind_verticies(model: *const ModelAllocation<B>,command_buffer: &mut B::CommandBuffer) {
-            command_buffer.bind_vertex_buffers(
-                0,
-                iter::once((&*(*model).vertex_buffer, buffer::SubRange::WHOLE)),
-            );
+    unsafe fn bind_verticies(
+        model: *const ModelAllocation<B>,
+        command_buffer: &mut B::CommandBuffer,
+    ) {
+        command_buffer.bind_vertex_buffers(
+            0,
+            iter::once((&*(*model).vertex_buffer, buffer::SubRange::WHOLE)),
+        );
     }
     pub fn load_textures(&mut self, image: &mut image::RgbaImage) -> TextureAllocation<B> {
         let limits = self.adapter.physical_device.limits();
@@ -627,7 +650,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         //buffering texture
 
         unsafe {
-            let (mut cmd_buffer,mut fence,mut queue_group) = self.wait_fence();
+            let (cmd_buffer, fence, queue_group) = self.wait_fence();
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             let image_barrier = m::Barrier::Image {
@@ -687,8 +710,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
 
             cmd_buffer.finish();
 
-            queue_group.queues[0]
-                .submit_without_semaphores(Some(&cmd_buffer), Some(&fence));
+            queue_group.queues[0].submit_without_semaphores(Some(&cmd_buffer), Some(&fence));
 
             //I need to wait for the fence somehow opps
             //todo!("Wait for fence. That might be a bug");
@@ -697,32 +719,35 @@ impl<B: gfx_hal::Backend> GPU<B> {
             image_upload_buffer,
             image_logo,
             image_memory,
+            image_upload_memory,
             image_srv,
             sampler,
         }
     }
-    pub unsafe fn bind_texture(texture: *const TextureAllocation<B>,device: &B::Device,descriptor_set: &B::DescriptorSet){
-        unsafe {
-            device.write_descriptor_sets(vec![
-                pso::DescriptorSetWrite {
-                    set: descriptor_set,
-                    binding: 0,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(
-                        &*((*texture).image_srv),
-                        i::Layout::ShaderReadOnlyOptimal,
-                    )),
-                },
-                pso::DescriptorSetWrite {
-                    set: descriptor_set,
-                    binding: 1,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Sampler(&*(*texture).sampler)),
-                },
-            ]);
-        }
+    pub unsafe fn bind_texture(
+        texture: *const TextureAllocation<B>,
+        device: &B::Device,
+        descriptor_set: &B::DescriptorSet,
+    ) {
+        device.write_descriptor_sets(vec![
+            pso::DescriptorSetWrite {
+                set: descriptor_set,
+                binding: 0,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Image(
+                    &*((*texture).image_srv),
+                    i::Layout::ShaderReadOnlyOptimal,
+                )),
+            },
+            pso::DescriptorSetWrite {
+                set: descriptor_set,
+                binding: 1,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Sampler(&*(*texture).sampler)),
+            },
+        ]);
     }
-    fn recreate_swapchain(&mut self){
+    fn recreate_swapchain(&mut self) {
         let caps = self.surface.capabilities(&self.adapter.physical_device);
         let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
         println!("{:?}", swap_config);
@@ -737,7 +762,10 @@ impl<B: gfx_hal::Backend> GPU<B> {
         self.viewport.rect.w = extent.width as _;
         self.viewport.rect.h = extent.height as _;
     }
-    pub fn draw_models(&mut self,draw_calls: Vec<(*const ModelAllocation<B>,*const TextureAllocation<B>)>){
+    pub fn draw_models(
+        &mut self,
+        draw_calls: Vec<(*const ModelAllocation<B>, *const TextureAllocation<B>)>,
+    ) {
         let surface_image = unsafe {
             match self.surface.acquire_image(!0) {
                 Ok((image, _)) => image,
@@ -807,9 +835,9 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 command::SubpassContents::Inline,
             );
             let cmd_ptr = (cmd_buffer) as *mut B::CommandBuffer;
-            for (m,t) in draw_calls.iter(){
-                Self::bind_texture(*t,&self.device,&self.desc_set);
-                Self::bind_verticies(*m,cmd_buffer);
+            for (m, t) in draw_calls.iter() {
+                Self::bind_texture(*t, &self.device, &self.desc_set);
+                Self::bind_verticies(*m, cmd_buffer);
                 (*cmd_ptr).draw(0..(**m).vertex_count, 0..1);
             }
             cmd_buffer.end_render_pass();

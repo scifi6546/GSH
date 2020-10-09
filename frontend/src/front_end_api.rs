@@ -20,36 +20,18 @@ extern crate gfx_backend_vulkan as back;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use nalgebra::{Vector2, Vector3};
-use winit::event::{KeyboardInput,VirtualKeyCode};
+use winit::event::KeyboardInput;
 mod front_end;
 use front_end::{DrawCall, Engine, Event};
 pub use front_end::{Model, Texture};
 mod gpu;
-use gfx_hal::{
-    buffer, command, format as f,
-    format::ChannelType,
-    image as i, memory as m, pass,
-    pass::Subpass,
-    pool,
-    prelude::*,
-    pso,
-    pso::{ShaderStageFlags, VertexInputRate},
-    queue::{QueueGroup, Submission},
-    window,
-};
+use gfx_hal::{prelude::*, window};
 use gpu::{ModelAllocation, TextureAllocation, DEFAULT_SIZE, GPU};
-use std::{
-    borrow::Borrow,
-    iter,
-    mem::{self, ManuallyDrop},
-    ptr,
-};
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct ModelId {
     id: usize,
 }
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct TextureId {
     id: usize,
 }
@@ -62,7 +44,7 @@ struct Context<B: gfx_hal::Backend> {
 impl<B: gfx_hal::Backend> Context<B> {
     fn new(
         instance: Option<B::Instance>,
-        mut surface: B::Surface,
+        surface: B::Surface,
         adapter: gfx_hal::adapter::Adapter<B>,
     ) -> Self {
         let mut gpu = GPU::new(instance, surface, adapter);
@@ -92,79 +74,68 @@ impl<B: gfx_hal::Backend> Context<B> {
     fn process_event(&mut self, event: Event) {
         self.front_end.process_event(event);
     }
-    fn event_loop(&mut self, event: Vec<Event>) {}
-    fn get_events(&self) -> Vec<Event> {
-        unimplemented!()
-    }
-    fn resize(&mut self, new_dimensions: window::Extent2D) {
+    fn resize(&mut self, _new_dimensions: window::Extent2D) {
         unimplemented!()
     }
     fn draw(&mut self) {
         let draw_calls = self.front_end.get_draw_calls();
-        let models = draw_calls.iter().map(|draw|
-            match draw{
-                DrawCall::DrawModel{
-                    model,
-                    texture,
-                    ..
-                }=>(& self.mesh_allocation[model.id] as *const ModelAllocation<B>,&self.texture_allocation[texture.id] as *const TextureAllocation<B>)
-            }
-        ).collect();
-
-        
-        unsafe{
-            self.gpu.draw_models(models);
-        }
-
+        let models = draw_calls
+            .iter()
+            .map(|draw| match draw {
+                DrawCall::DrawModel { model, texture, .. } => (
+                    &self.mesh_allocation[model.id] as *const ModelAllocation<B>,
+                    &self.texture_allocation[texture.id] as *const TextureAllocation<B>,
+                ),
+            })
+            .collect();
+        self.gpu.draw_models(models);
     }
 }
 fn to_event(keyboard: KeyboardInput) -> Event {
-    if let Some(event) = keyboard.virtual_keycode{
+    if let Some(event) = keyboard.virtual_keycode {
         use winit::event::VirtualKeyCode;
-        match event{
-            VirtualKeyCode::Key1=>Event::RegularKey('1'),
-            VirtualKeyCode::Key2=>Event::RegularKey('2'),
-            VirtualKeyCode::Key3=>Event::RegularKey('3'),
-            VirtualKeyCode::Key4=>Event::RegularKey('4'),
-            VirtualKeyCode::Key5=>Event::RegularKey('5'),
-            VirtualKeyCode::Key6=>Event::RegularKey('6'),
-            VirtualKeyCode::Key7=>Event::RegularKey('7'),
-            VirtualKeyCode::Key8=>Event::RegularKey('8'),
-            VirtualKeyCode::Key9=>Event::RegularKey('9'),
-            VirtualKeyCode::Key0=>Event::RegularKey('0'),
-            VirtualKeyCode::A=>Event::RegularKey('a'),
-            VirtualKeyCode::B=>Event::RegularKey('b'),
-            VirtualKeyCode::C=>Event::RegularKey('c'),
-            VirtualKeyCode::D=>Event::RegularKey('d'),
-            VirtualKeyCode::E=>Event::RegularKey('e'),
-            VirtualKeyCode::F=>Event::RegularKey('f'),
-            VirtualKeyCode::G=>Event::RegularKey('g'),
-            VirtualKeyCode::H=>Event::RegularKey('h'),
-            VirtualKeyCode::I=>Event::RegularKey('i'),
-            VirtualKeyCode::J=>Event::RegularKey('j'),
-            VirtualKeyCode::K=>Event::RegularKey('k'),
-            VirtualKeyCode::L=>Event::RegularKey('l'),
-            VirtualKeyCode::M=>Event::RegularKey('m'),
-            VirtualKeyCode::N=>Event::RegularKey('n'),
-            VirtualKeyCode::O=>Event::RegularKey('o'),
-            VirtualKeyCode::P=>Event::RegularKey('p'),
-            VirtualKeyCode::Q=>Event::RegularKey('q'),
-            VirtualKeyCode::R=>Event::RegularKey('r'),
-            VirtualKeyCode::S=>Event::RegularKey('s'),
-            VirtualKeyCode::T=>Event::RegularKey('t'),
-            VirtualKeyCode::U=>Event::RegularKey('u'),
-            VirtualKeyCode::V=>Event::RegularKey('v'),
-            VirtualKeyCode::W=>Event::RegularKey('w'),
-            VirtualKeyCode::X=>Event::RegularKey('x'),
-            VirtualKeyCode::Y=>Event::RegularKey('y'),
-            VirtualKeyCode::Z=>Event::RegularKey('z'),
-            _=>Event::Unknown,
+        match event {
+            VirtualKeyCode::Key1 => Event::RegularKey('1'),
+            VirtualKeyCode::Key2 => Event::RegularKey('2'),
+            VirtualKeyCode::Key3 => Event::RegularKey('3'),
+            VirtualKeyCode::Key4 => Event::RegularKey('4'),
+            VirtualKeyCode::Key5 => Event::RegularKey('5'),
+            VirtualKeyCode::Key6 => Event::RegularKey('6'),
+            VirtualKeyCode::Key7 => Event::RegularKey('7'),
+            VirtualKeyCode::Key8 => Event::RegularKey('8'),
+            VirtualKeyCode::Key9 => Event::RegularKey('9'),
+            VirtualKeyCode::Key0 => Event::RegularKey('0'),
+            VirtualKeyCode::A => Event::RegularKey('a'),
+            VirtualKeyCode::B => Event::RegularKey('b'),
+            VirtualKeyCode::C => Event::RegularKey('c'),
+            VirtualKeyCode::D => Event::RegularKey('d'),
+            VirtualKeyCode::E => Event::RegularKey('e'),
+            VirtualKeyCode::F => Event::RegularKey('f'),
+            VirtualKeyCode::G => Event::RegularKey('g'),
+            VirtualKeyCode::H => Event::RegularKey('h'),
+            VirtualKeyCode::I => Event::RegularKey('i'),
+            VirtualKeyCode::J => Event::RegularKey('j'),
+            VirtualKeyCode::K => Event::RegularKey('k'),
+            VirtualKeyCode::L => Event::RegularKey('l'),
+            VirtualKeyCode::M => Event::RegularKey('m'),
+            VirtualKeyCode::N => Event::RegularKey('n'),
+            VirtualKeyCode::O => Event::RegularKey('o'),
+            VirtualKeyCode::P => Event::RegularKey('p'),
+            VirtualKeyCode::Q => Event::RegularKey('q'),
+            VirtualKeyCode::R => Event::RegularKey('r'),
+            VirtualKeyCode::S => Event::RegularKey('s'),
+            VirtualKeyCode::T => Event::RegularKey('t'),
+            VirtualKeyCode::U => Event::RegularKey('u'),
+            VirtualKeyCode::V => Event::RegularKey('v'),
+            VirtualKeyCode::W => Event::RegularKey('w'),
+            VirtualKeyCode::X => Event::RegularKey('x'),
+            VirtualKeyCode::Y => Event::RegularKey('y'),
+            VirtualKeyCode::Z => Event::RegularKey('z'),
+            _ => Event::Unknown,
         }
-    }else{
+    } else {
         Event::Unknown
     }
-    
-    
 }
 pub fn build_vulkan_context() {
     #[cfg(target_arch = "wasm32")]
