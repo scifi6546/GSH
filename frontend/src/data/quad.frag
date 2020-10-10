@@ -8,5 +8,5 @@ layout(set = 0, binding = 0) uniform texture2D u_texture;
 layout(set = 0, binding = 1) uniform sampler u_sampler;
 
 void main() {
-    target0 = texture(sampler2D(u_texture, u_sampler), v_uv)+vec4(v_uv.x,v_uv.y,0.0,0.0);
+    target0 = texture(sampler2D(u_texture, u_sampler), v_uv);
 }

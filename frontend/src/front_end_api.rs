@@ -22,8 +22,8 @@ use wasm_bindgen::prelude::*;
 
 use winit::event::KeyboardInput;
 mod front_end;
-use front_end::{DrawCall, Engine, Event};
-pub use front_end::{Model, Texture};
+use front_end::{DrawCall, Event, Scene, SceneCtor};
+pub use front_end::{Model, Terminal, Texture};
 mod gpu;
 use gfx_hal::{prelude::*, window};
 use gpu::{ModelAllocation, TextureAllocation, DEFAULT_SIZE, GPU};
@@ -35,20 +35,21 @@ pub struct ModelId {
 pub struct TextureId {
     id: usize,
 }
-struct Context<B: gfx_hal::Backend> {
-    front_end: Engine,
+struct Context<B: gfx_hal::Backend, E: Scene> {
+    front_end: E,
     mesh_allocation: Vec<ModelAllocation<B>>,
     texture_allocation: Vec<TextureAllocation<B>>,
     gpu: GPU<B>,
 }
-impl<B: gfx_hal::Backend> Context<B> {
+impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
     fn new(
         instance: Option<B::Instance>,
         surface: B::Surface,
         adapter: gfx_hal::adapter::Adapter<B>,
+        scene_ctor: Box<dyn Fn() -> SceneCtor<E>>,
     ) -> Self {
         let mut gpu = GPU::new(instance, surface, adapter);
-        let (mut models, mut textures, engine_ctor) = Engine::new();
+        let (mut models, mut textures, engine_ctor) = scene_ctor();
         let mesh_allocation: Vec<ModelAllocation<B>> = models
             .iter_mut()
             .map(|model| gpu.load_verticies(&mut model.mesh))
@@ -209,7 +210,7 @@ pub fn build_vulkan_context() {
 
     let adapter = adapters.remove(0);
 
-    let mut context = Context::new(instance, surface, adapter);
+    let mut context = Context::new(instance, surface, adapter, Box::new(Terminal::new));
 
     //renderer.event_loop();
 
