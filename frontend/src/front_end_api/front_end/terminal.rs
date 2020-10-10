@@ -4,6 +4,7 @@ use nalgebra::{Vector2, Vector3};
 pub struct Terminal {
     terminal_mesh: ModelId,
     texture: TextureId,
+    input_buffer: Vec<char>,
 }
 impl Terminal {
     pub fn new() -> SceneCtor<Self> {
@@ -25,6 +26,7 @@ impl Terminal {
             Box::new(|model, textures| Terminal {
                 terminal_mesh: model[0].clone(),
                 texture: textures[0].clone(),
+                input_buffer: vec![],
             }),
         )
     }
@@ -32,15 +34,28 @@ impl Terminal {
 impl Scene for Terminal {
     fn get_draw_calls(&self) -> Vec<DrawCall> {
         //gets draw calls from sub scenes
-        vec![DrawCall::DrawModel {
-            model: self.terminal_mesh.clone(),
-            texture: self.texture.clone(),
-            position: Vector3::new(0.0, 0.0, 0.0),
-        }]
+        vec![
+            DrawCall::DrawModel {
+                model: self.terminal_mesh.clone(),
+                texture: self.texture.clone(),
+                position: Vector3::new(0.0, 0.0, 0.0),
+            },
+            DrawCall::UpdateTexture {
+                texture: self.texture.clone(),
+                new_texture: image::RgbaImage::from_pixel(
+                    100,
+                    100,
+                    Rgba([self.input_buffer.len() as u8, 0, 25, 255]),
+                ),
+            },
+        ]
     }
     fn process_event(&mut self, event: Event) {
         match event {
-            Event::RegularKey(c) => println!("pressed: {}", c),
+            Event::RegularKey(c) => {
+                println!("pressed: {}", c);
+                self.input_buffer.push(c)
+            }
             Event::SpecialKey(k) => println!("special key {:?}", k),
             _ => (),
         }
