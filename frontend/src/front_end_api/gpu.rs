@@ -161,7 +161,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             formats
                 .iter()
                 .find(|format| format.base_format().1 == ChannelType::Srgb)
-                .copied()
+                .map(|format| *format)
                 .unwrap_or(formats[0])
         });
 
@@ -490,7 +490,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
-
+        
         (
             &mut self.cmd_buffers[frame_idx],
             fence,
