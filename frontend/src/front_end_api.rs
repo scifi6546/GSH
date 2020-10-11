@@ -171,10 +171,12 @@ pub fn build_vulkan_context() {
     // instantiate backend
     #[cfg(not(target_arch = "wasm32"))]
     let (_window, instance, mut adapters, surface) = {
+        
         let window = wb.build(&event_loop).unwrap();
         let instance =
             back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
         let adapters = instance.enumerate_adapters();
+        println!("num adaptors: {}",adapters.len());
         let surface = unsafe {
             instance
                 .create_surface(&window)
