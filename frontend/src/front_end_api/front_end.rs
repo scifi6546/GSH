@@ -17,6 +17,10 @@ pub enum DrawCall {
         texture: TextureId,
         position: Vector3<f32>,
     },
+    UpdateTexture {
+        texture: TextureId,
+        new_texture: image::RgbaImage,
+    },
 }
 //any key that is not a letter
 #[allow(dead_code)]

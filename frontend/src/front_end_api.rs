@@ -80,15 +80,31 @@ impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
     }
     fn draw(&mut self) {
         let draw_calls = self.front_end.get_draw_calls();
-        let models = draw_calls
-            .iter()
-            .map(|draw| match draw {
-                DrawCall::DrawModel { model, texture, .. } => (
+        let mut models = vec![];
+        let mut texture_modifications = vec![];
+        for draw in draw_calls.iter() {
+            match draw {
+                DrawCall::DrawModel { model, texture, .. } => models.push((
                     &self.mesh_allocation[model.id] as *const ModelAllocation<B>,
                     &self.texture_allocation[texture.id] as *const TextureAllocation<B>,
-                ),
-            })
-            .collect();
+                )),
+                DrawCall::UpdateTexture {
+                    texture,
+                    new_texture,
+                } => texture_modifications.push((
+                    &mut self.texture_allocation[texture.id] as *mut TextureAllocation<B>,
+                    new_texture,
+                )),
+            }
+        }
+        for (texture_alloc, mut new_texture) in texture_modifications.iter_mut() {
+            unsafe {
+                self.gpu.destroy_texture(&mut *(*texture_alloc));
+                let mut texture_deref = texture_alloc.read();
+
+                texture_deref = self.gpu.load_textures(new_texture);
+            }
+        }
         self.gpu.draw_models(models);
     }
 }

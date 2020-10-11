@@ -58,13 +58,9 @@ pub struct ModelAllocation<B: gfx_hal::Backend> {
     vertex_count: u32,
 }
 pub struct TextureAllocation<B: gfx_hal::Backend> {
-    #[allow(dead_code)]
     image_upload_buffer: ManuallyDrop<B::Buffer>,
-    #[allow(dead_code)]
     image_logo: ManuallyDrop<B::Image>,
-    #[allow(dead_code)]
     image_memory: ManuallyDrop<B::Memory>,
-    #[allow(dead_code)]
     image_upload_memory: ManuallyDrop<B::Memory>,
     image_srv: ManuallyDrop<B::ImageView>,
     sampler: ManuallyDrop<B::Sampler>,
@@ -490,7 +486,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
-        
+
         (
             &mut self.cmd_buffers[frame_idx],
             fence,
@@ -506,7 +502,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             iter::once((&*(*model).vertex_buffer, buffer::SubRange::WHOLE)),
         );
     }
-    pub fn load_textures(&mut self, image: &mut image::RgbaImage) -> TextureAllocation<B> {
+    pub fn load_textures(&mut self, image: &image::RgbaImage) -> TextureAllocation<B> {
         let limits = self.adapter.physical_device.limits();
         let non_coherent_alignment = limits.non_coherent_atom_size as u64;
         println!("loaded dimensions: {} {}", image.width(), image.height());
@@ -724,6 +720,20 @@ impl<B: gfx_hal::Backend> GPU<B> {
             image_srv,
             sampler,
         }
+    }
+    pub unsafe fn destroy_texture(&mut self, texture: &mut TextureAllocation<B>) {
+        self.device
+            .destroy_buffer(ManuallyDrop::take(&mut (texture).image_upload_buffer));
+        self.device
+            .destroy_image(ManuallyDrop::take(&mut (*texture).image_logo));
+        self.device
+            .free_memory(ManuallyDrop::take(&mut (*texture).image_memory));
+        self.device
+            .free_memory(ManuallyDrop::take(&mut (*texture).image_upload_memory));
+        self.device
+            .destroy_image_view(ManuallyDrop::take(&mut (*texture).image_srv));
+        self.device
+            .destroy_sampler(ManuallyDrop::take(&mut (*texture).sampler));
     }
     pub unsafe fn bind_texture(
         texture: *const TextureAllocation<B>,
