@@ -75,8 +75,8 @@ impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
     fn process_event(&mut self, event: Event) {
         self.front_end.process_event(event);
     }
-    fn resize(&mut self, _new_dimensions: window::Extent2D) {
-        unimplemented!()
+    fn resize(&mut self, new_size: window::Extent2D) {
+        self.gpu.change_resolution(new_size);
     }
     fn draw(&mut self) {
         let draw_calls = self.front_end.get_draw_calls();

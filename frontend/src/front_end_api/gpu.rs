@@ -26,7 +26,7 @@ pub struct GPU<B: gfx_hal::Backend> {
     surface: ManuallyDrop<B::Surface>,
     adapter: gfx_hal::adapter::Adapter<B>,
     format: gfx_hal::format::Format,
-    pub dimensions: window::Extent2D,
+    dimensions: window::Extent2D,
     viewport: pso::Viewport,
     render_pass: ManuallyDrop<B::RenderPass>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
@@ -506,7 +506,6 @@ impl<B: gfx_hal::Backend> GPU<B> {
     pub fn load_textures(&mut self, image: &image::RgbaImage) -> TextureAllocation<B> {
         let limits = self.adapter.physical_device.limits();
         let non_coherent_alignment = limits.non_coherent_atom_size as u64;
-        println!("loaded dimensions: {} {}", image.width(), image.height());
         let kind = i::Kind::D2(image.width() as i::Size, image.height() as i::Size, 1, 1);
         let row_alignment_mask = limits.optimal_buffer_copy_pitch_alignment as u32 - 1;
         let image_stride = 4usize;
@@ -765,7 +764,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
     fn recreate_swapchain(&mut self) {
         let caps = self.surface.capabilities(&self.adapter.physical_device);
         let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
-        println!("{:?}", swap_config);
+        println!("{:#?}", swap_config);
         let extent = swap_config.extent.to_extent();
 
         unsafe {
@@ -776,6 +775,10 @@ impl<B: gfx_hal::Backend> GPU<B> {
 
         self.viewport.rect.w = extent.width as _;
         self.viewport.rect.h = extent.height as _;
+    }
+    pub fn change_resolution(&mut self,new_size: window::Extent2D){
+        self.dimensions = new_size;
+        self.recreate_swapchain();
     }
     pub fn draw_models(
         &mut self,
