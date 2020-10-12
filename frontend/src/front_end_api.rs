@@ -97,12 +97,12 @@ impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
                 )),
             }
         }
-        for (texture_alloc, mut new_texture) in texture_modifications.iter_mut() {
+        for (mut texture_alloc, mut new_texture) in texture_modifications.iter_mut() {
             unsafe {
-                self.gpu.destroy_texture(&mut *(*texture_alloc));
-                let mut texture_deref = texture_alloc.read();
-
-                texture_deref = self.gpu.load_textures(new_texture);
+                self.gpu.destroy_texture(&mut *texture_alloc);
+                *texture_alloc = self.gpu.load_textures(new_texture);
+               
+                //texture_deref = self.gpu.load_textures(new_texture);
             }
         }
         self.gpu.draw_models(models);

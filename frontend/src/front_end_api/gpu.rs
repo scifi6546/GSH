@@ -58,6 +58,7 @@ pub struct ModelAllocation<B: gfx_hal::Backend> {
     vertex_count: u32,
 }
 pub struct TextureAllocation<B: gfx_hal::Backend> {
+    freed: bool,
     image_upload_buffer: ManuallyDrop<B::Buffer>,
     image_logo: ManuallyDrop<B::Image>,
     image_memory: ManuallyDrop<B::Memory>,
@@ -713,6 +714,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             //todo!("Wait for fence. That might be a bug");
         }
         TextureAllocation {
+            freed: false,
             image_upload_buffer,
             image_logo,
             image_memory,
@@ -722,6 +724,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         }
     }
     pub unsafe fn destroy_texture(&mut self, texture: &mut TextureAllocation<B>) {
+        assert_eq!(texture.freed,false);
         self.device
             .destroy_buffer(ManuallyDrop::take(&mut (texture).image_upload_buffer));
         self.device
@@ -734,6 +737,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             .destroy_image_view(ManuallyDrop::take(&mut (*texture).image_srv));
         self.device
             .destroy_sampler(ManuallyDrop::take(&mut (*texture).sampler));
+        texture.freed=true;
     }
     pub unsafe fn bind_texture(
         texture: *const TextureAllocation<B>,
