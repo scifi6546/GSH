@@ -22,14 +22,33 @@ impl Renderer{
         }
     }
     pub fn write_to_canvas(&self,canvas: &mut Canvas,data: String){
-        unimplemented!();
+        let font = SystemSource::new().select_best_match(&[FamilyName::SansSerif],
+            &Properties::new())
+            .unwrap()
+            .load()
+            .unwrap();
+        
+        for (glyph,position) in self.get_string_position(&data,Vector2::new(canvas.size.x(),canvas.size.y())){
+            font.rasterize_glyph(canvas, glyph, 12.0, Transform2F::from_translation(Vector2F::new(
+                position.x as f32,position.y as f32
+            )), HintingOptions::None, RasterizationOptions::GrayscaleAa);
+        }
     }
     fn get_string_position(&self,data:&String,canvas_size:Vector2<i32>)->Vec<(u32,Vector2<i32>)>{
         let mut current_pos:Vector2<i32> = Vector2::new(0,0);
         data.chars().map(|c|{
-            current_pos+=self.get_char_size(c);
-            let glyph = self.font.glyph_for_char(c).unwrap();
-            (glyph,current_pos.clone())
+            if (current_pos+self.get_char_size(c)).x<canvas_size.x{
+                current_pos.x+=self.get_char_size(c).x;
+                let glyph = self.font.glyph_for_char(c).unwrap();
+                (glyph,current_pos.clone())
+            }else{
+                current_pos.x=0;
+                let s = self.get_char_size(c);
+                current_pos+=s;
+                let glyph = self.font.glyph_for_char(c).unwrap();
+                (glyph,current_pos.clone())
+            }
+            
         }).collect()
         
     }
