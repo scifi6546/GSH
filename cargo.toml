@@ -4,4 +4,5 @@ members = [
     "parser",
     "view",
     "prototype_render_api",
+    "font_renderer",
 ]
