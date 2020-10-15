@@ -2,21 +2,25 @@ use super::{DrawCall, Event, Model, ModelId, Scene, SceneCtor, Texture, TextureI
 use image::Rgba;
 use font_kit::source::SystemSource;
 use nalgebra::{Vector2, Vector3};
+use font_renderer::Renderer;
 pub struct Terminal {
     terminal_mesh: ModelId,
     texture: TextureId,
-    input_buffer: Vec<char>,
+    input_buffer: String,
+    font: Renderer,
 }
 impl Terminal {
     pub fn new() -> SceneCtor<Self> {
+        #[rustfmt::skip]
         let model = Model {
             mesh: vec![
+                
                 (Vector3::new(-1.0, 1.0, 0.0), Vector2::new(0.0, 0.0)),
-                (Vector3::new(1.0, 1.0, 0.0), Vector2::new(1.0, 0.0)),
-                (Vector3::new(1.0, -1.0, 0.0), Vector2::new(1.0, 0.0)),
+                (Vector3::new( 1.0, 1.0, 0.0), Vector2::new(1.0, 0.0)),
+                (Vector3::new( 1.0,-1.0, 0.0), Vector2::new(1.0, 1.0)),
                 (Vector3::new(-1.0, 1.0, 0.0), Vector2::new(0.0, 0.0)),
-                (Vector3::new(1.0, -1.0, 0.0), Vector2::new(1.0, 0.0)),
-                (Vector3::new(-1.0, -1.0, 0.0), Vector2::new(0.0, 1.0)),
+                (Vector3::new( 1.0,-1.0, 0.0), Vector2::new(1.0, 1.0)),
+                (Vector3::new(-1.0,-1.0, 0.0), Vector2::new(0.0, 1.0)),
             ],
             indicies: vec![],
         };
@@ -27,7 +31,8 @@ impl Terminal {
             Box::new(|model, textures| Terminal {
                 terminal_mesh: model[0].clone(),
                 texture: textures[0].clone(),
-                input_buffer: vec![],
+                input_buffer: "".to_string(),
+                font: Renderer::new()
             }),
         )
     }
@@ -35,6 +40,13 @@ impl Terminal {
 impl Scene for Terminal {
     fn get_draw_calls(&self) -> Vec<DrawCall> {
         //gets draw calls from sub scenes
+        let mut texture = image::RgbaImage::from_pixel(
+            100,
+            100,
+            Rgba([self.input_buffer.len() as u8, 0, 25, 255]),
+        );
+        
+        let texture = self.font.write_to_image(texture, &self.input_buffer);
         vec![
             DrawCall::DrawModel {
                 model: self.terminal_mesh.clone(),
@@ -43,11 +55,7 @@ impl Scene for Terminal {
             },
             DrawCall::UpdateTexture {
                 texture: self.texture.clone(),
-                new_texture: image::RgbaImage::from_pixel(
-                    100,
-                    100,
-                    Rgba([self.input_buffer.len() as u8, 0, 25, 255]),
-                ),
+                new_texture: texture,
             },
         ]
     }
@@ -55,7 +63,7 @@ impl Scene for Terminal {
         match event {
             Event::RegularKey(c) => {
                 println!("pressed: {}", c);
-                self.input_buffer.push(c)
+                self.input_buffer.push(c);
             }
             Event::SpecialKey(k) => println!("special key {:?}", k),
             _ => (),

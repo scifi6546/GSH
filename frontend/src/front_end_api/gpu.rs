@@ -18,6 +18,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ptr,
 };
+use image::RgbaImage;
 pub struct GPU<B: gfx_hal::Backend> {
     device: B::Device,
     queue_group: QueueGroup<B>,
@@ -504,6 +505,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         );
     }
     pub fn load_textures(&mut self, image: &image::RgbaImage) -> TextureAllocation<B> {
+        println!("dimensions: {} {}",image.width(),image.height());
         let limits = self.adapter.physical_device.limits();
         let non_coherent_alignment = limits.non_coherent_atom_size as u64;
         let kind = i::Kind::D2(image.width() as i::Size, image.height() as i::Size, 1, 1);
@@ -512,6 +514,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         let row_pitch =
             (image.width() * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
         let upload_size = (image.height() * row_pitch) as u64;
+        println!("row pitch: {}",row_pitch);
         let padded_upload_size = ((upload_size + non_coherent_alignment - 1)
             / non_coherent_alignment)
             * non_coherent_alignment;
@@ -543,6 +546,11 @@ impl<B: gfx_hal::Backend> GPU<B> {
             .into();
         let image_mem_reqs = unsafe { self.device.get_buffer_requirements(&image_upload_buffer) };
         // copy image data into staging buffer
+        
+        //checking preconditions
+        let image_layout = image.as_flat_samples().layout;
+        assert_eq!(image_layout.width_stride,4);
+        assert_eq!(image_layout.height_stride,4*image_layout.width as usize);
         let image_upload_memory = unsafe {
             let memory = self
                 .device
@@ -552,15 +560,15 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
                 .unwrap();
             let mapping = self.device.map_memory(&memory, m::Segment::ALL).unwrap();
-            for y in 0..image.height() as usize {
-                let row = &(**image)[y * (image.width() as usize) * image_stride
-                    ..(y + 1) * (image.width() as usize) * image_stride];
-                ptr::copy_nonoverlapping(
-                    row.as_ptr(),
-                    mapping.offset(y as isize * row_pitch as isize),
-                    image.width() as usize * image_stride,
-                );
-            }
+            ptr::copy_nonoverlapping(image.as_ptr(), mapping, upload_size as usize);
+            //for y in 0..image.height() as usize {
+            //    let row = flat_sample.as_mut_slice();
+            //    ptr::copy_nonoverlapping(
+            //        row.as_ptr(),
+            //        mapping.offset(y as isize * row_pitch as isize),
+            //        image.width() as usize * image_stride,
+            //    );
+            //}
             self.device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();

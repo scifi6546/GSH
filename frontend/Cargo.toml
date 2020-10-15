@@ -20,7 +20,7 @@ gfx-backend-empty = "0.6.0"
 font-kit="0.10.0"
 pathfinder_geometry = "0.5.1"
 nalgebra = "0.22.0"
-
+font_renderer = {path="../font_renderer"}
 [target.'cfg(target_os = "linux")'.dependencies.gfx-backend-vulkan]
 version = "0.6.1"
 features=["x11"]

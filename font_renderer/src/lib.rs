@@ -7,13 +7,15 @@ use font_kit::source::SystemSource;
 use pathfinder_geometry::transform2d::Transform2F;
 use pathfinder_geometry::vector::{Vector2F, Vector2I};
 use nalgebra::Vector2;
+use image::{RgbaImage,RgbImage};
+use image::buffer::ConvertBuffer;
 pub struct Renderer{
     font: Font,
 }
 impl Renderer{
     pub fn new()->Self{
         let font = SystemSource::new()
-            .select_best_match(&[FamilyName::SansSerif], &Properties::new())
+            .select_best_match(&[FamilyName::Monospace], &Properties::new())
             .unwrap()
             .load()
             .unwrap();
@@ -21,17 +23,27 @@ impl Renderer{
             font
         }
     }
-    pub fn write_to_canvas(&self,canvas: &mut Canvas,data: String){
-        let font = SystemSource::new().select_best_match(&[FamilyName::SansSerif],
-            &Properties::new())
-            .unwrap()
-            .load()
-            .unwrap();
+    pub fn write_to_image(&self,image: RgbaImage,data:&String)->RgbaImage{
+        let width = image.width();
+        let height = image.height();
+        let image2:RgbImage = image.convert();
+        let mut canvas = Canvas{
+            pixels: image2.into_vec(),
+            size: Vector2I::new(width as i32,height as i32),
+            stride:width as usize*3,
+            format: Format::Rgb24,
+        };
+        self.write_to_canvas(&mut canvas, data);
+        let img = RgbImage::from_vec(width, height, canvas.pixels).unwrap();
+        let img2 = img.convert();
+        return img2
+    }
+    fn write_to_canvas(&self,canvas: &mut Canvas,data: &String){
         
         for (glyph,position) in self.get_string_position(&data,Vector2::new(canvas.size.x(),canvas.size.y())){
-            font.rasterize_glyph(canvas, glyph, 12.0, Transform2F::from_translation(Vector2F::new(
+            self.font.rasterize_glyph(canvas, glyph, 12.0, Transform2F::from_translation(Vector2F::new(
                 position.x as f32,position.y as f32
-            )), HintingOptions::None, RasterizationOptions::GrayscaleAa);
+            )), HintingOptions::None, RasterizationOptions::SubpixelAa).ok().unwrap();
         }
     }
     fn get_string_position(&self,data:&String,canvas_size:Vector2<i32>)->Vec<(u32,Vector2<i32>)>{
