@@ -23,7 +23,7 @@ impl Renderer{
             font
         }
     }
-    pub fn write_to_image(&self,image: RgbaImage,data:&String)->RgbaImage{
+    pub fn write_to_image(&self,image: RgbaImage,data:&String,point_size:f32)->RgbaImage{
         let width = image.width();
         let height = image.height();
         let image2:RgbImage = image.convert();
@@ -33,29 +33,29 @@ impl Renderer{
             stride:width as usize*3,
             format: Format::Rgb24,
         };
-        self.write_to_canvas(&mut canvas, data);
+        self.write_to_canvas(&mut canvas, data,point_size);
         let img = RgbImage::from_vec(width, height, canvas.pixels).unwrap();
         let img2 = img.convert();
         return img2
     }
-    fn write_to_canvas(&self,canvas: &mut Canvas,data: &String){
+    fn write_to_canvas(&self,canvas: &mut Canvas,data: &String,point_size:f32){
         
-        for (glyph,position) in self.get_string_position(&data,Vector2::new(canvas.size.x(),canvas.size.y())){
-            self.font.rasterize_glyph(canvas, glyph, 12.0, Transform2F::from_translation(Vector2F::new(
+        for (glyph,position) in self.get_string_position(&data,Vector2::new(canvas.size.x(),canvas.size.y()),point_size){
+            self.font.rasterize_glyph(canvas, glyph, point_size, Transform2F::from_translation(Vector2F::new(
                 position.x as f32,position.y as f32
             )), HintingOptions::None, RasterizationOptions::SubpixelAa).ok().unwrap();
         }
     }
-    fn get_string_position(&self,data:&String,canvas_size:Vector2<i32>)->Vec<(u32,Vector2<i32>)>{
+    fn get_string_position(&self,data:&String,canvas_size:Vector2<i32>,point_size:f32)->Vec<(u32,Vector2<i32>)>{
         let mut current_pos:Vector2<i32> = Vector2::new(0,0);
         data.chars().map(|c|{
-            if (current_pos+self.get_char_size(c)).x<canvas_size.x{
-                current_pos.x+=self.get_char_size(c).x;
+            if (current_pos+self.get_char_size(c,point_size)).x<canvas_size.x{
+                current_pos.x+=self.get_char_size(c,point_size).x;
                 let glyph = self.font.glyph_for_char(c).unwrap();
                 (glyph,current_pos.clone())
             }else{
                 current_pos.x=0;
-                let s = self.get_char_size(c);
+                let s = self.get_char_size(c,point_size);
                 current_pos+=s;
                 let glyph = self.font.glyph_for_char(c).unwrap();
                 (glyph,current_pos.clone())
@@ -64,11 +64,11 @@ impl Renderer{
         }).collect()
         
     }
-    fn get_char_size(&self,character:char)->Vector2<i32>{
+    fn get_char_size(&self,character:char,point_size:f32)->Vector2<i32>{
         let glyph_id = self.font.glyph_for_char(character).unwrap();
         let raster_bounds = self.font.raster_bounds(
             glyph_id,
-            12.0,
+            point_size,
             Transform2F::from_translation(Vector2F::new(0.0, 32.0)),
             HintingOptions::None,
             RasterizationOptions::GrayscaleAa,
@@ -83,6 +83,6 @@ mod tests {
     fn it_works() {
         let mut canvas = Canvas::new(Vector2I::splat(32), Format::A8);
         let r = Renderer::new();
-        r.write_to_canvas(&mut canvas, String::from("Hello World"));
+        r.write_to_canvas(&mut canvas, &String::from("Hello World"),12.0);
     }
 }

@@ -15,12 +15,12 @@ impl Terminal {
         let model = Model {
             mesh: vec![
                 
-                (Vector3::new(-1.0, 1.0, 0.0), Vector2::new(0.0, 0.0)),
-                (Vector3::new( 1.0, 1.0, 0.0), Vector2::new(1.0, 0.0)),
-                (Vector3::new( 1.0,-1.0, 0.0), Vector2::new(1.0, 1.0)),
-                (Vector3::new(-1.0, 1.0, 0.0), Vector2::new(0.0, 0.0)),
-                (Vector3::new( 1.0,-1.0, 0.0), Vector2::new(1.0, 1.0)),
-                (Vector3::new(-1.0,-1.0, 0.0), Vector2::new(0.0, 1.0)),
+                (Vector3::new(-1.0,-1.0, 0.0), Vector2::new(0.0, 0.0)),
+                (Vector3::new( 1.0,-1.0, 0.0), Vector2::new(1.0, 0.0)),
+                (Vector3::new( 1.0, 1.0, 0.0), Vector2::new(1.0, 1.0)),
+                (Vector3::new(-1.0,-1.0, 0.0), Vector2::new(0.0, 0.0)),
+                (Vector3::new( 1.0, 1.0, 0.0), Vector2::new(1.0, 1.0)),
+                (Vector3::new(-1.0, 1.0, 0.0), Vector2::new(0.0, 1.0)),
             ],
             indicies: vec![],
         };
@@ -41,12 +41,12 @@ impl Scene for Terminal {
     fn get_draw_calls(&self) -> Vec<DrawCall> {
         //gets draw calls from sub scenes
         let mut texture = image::RgbaImage::from_pixel(
-            100,
-            100,
+            1000,
+            1000,
             Rgba([self.input_buffer.len() as u8, 0, 25, 255]),
         );
         
-        let texture = self.font.write_to_image(texture, &self.input_buffer);
+        let texture = self.font.write_to_image(texture, &self.input_buffer,12.0);
         vec![
             DrawCall::DrawModel {
                 model: self.terminal_mesh.clone(),
