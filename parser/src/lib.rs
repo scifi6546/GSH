@@ -1,7 +1,13 @@
-//the parsed result.
+use image::RgbaImage;
+use nalgebra::Vector2;
+/// The parsed result.
 #[derive(Debug, PartialEq)]
 pub enum ParsedAST {
     String(String),
+    Figure{
+        dimensions: Vector2<u32>,
+        contents: Vec<FigureContents>
+    }
 }
 #[derive(Debug)]
 pub enum ParseError {
@@ -10,6 +16,17 @@ pub enum ParseError {
 }
 enum Datatypes {
     Text = 0x0,
+}
+#[derive(Debug, PartialEq)]
+pub enum FigureContents{
+    Image(RgbaImage),
+    Line(Line)
+
+}
+#[derive(Debug, PartialEq)]
+pub struct Line{
+    pub color: u32,
+    pub segments: Vec<Vector2<i32>>,
 }
 pub struct Parser {
     buffer: Vec<u8>,
@@ -104,5 +121,14 @@ mod tests {
             .ok()
             .unwrap();
         assert_eq!(parsed.len(), 0);
+    }
+    #[test]
+    fn parse_figure(){
+        let mut p = Parser::new();
+        let parsed = p.parse(&mut vec![1,0,0,0,
+            8,0,0,0,
+            5,0,0,0,
+            5,0,0,0]).ok().unwrap();
+        assert_eq!(parsed[0],ParsedAST::Figure{dimensions: Vector2::new(5,5),contents: vec![]})
     }
 }
