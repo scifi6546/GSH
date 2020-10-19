@@ -1,110 +1,93 @@
-#[derive(std::cmp::PartialEq, Debug)]
-pub enum Token {
-    FreeWrite,
-    AppendWrite,
-    DrawText {
-        x: f32,
-        y: f32,
-        text: String,
-    },
-    DrawLine {
-        x_start: f32,
-        y_start: f32,
-        x_end: f32,
-        y_end: f32,
-    },
-    Error(SyntaxError),
+//the parsed result. 
+#[derive(Debug,PartialEq)]
+pub enum ParsedAST{
+    String(String)
 }
-#[derive(std::cmp::PartialEq, Debug)]
-pub enum SyntaxError {
-    InvalidToken,
+#[derive(Debug)]
+pub enum ParseError{
+    InvalidDatatype(u32),
+    StringNotUTF8,
 }
-pub fn parse(data: String) -> Result<Vec<Token>, SyntaxError> {
-    let mut tokens = vec![];
-    let mut iter = data.split("\n").peekable();
-    loop {
-        let line = iter.peek();
-        if line.is_none() {
-            return Ok(tokens);
-        }
-        let push_token = match line.unwrap() {
-            &"SET FREE" => {
-                iter.next();
-                Some(Token::FreeWrite)
-            }
-            &"SET APPEND" => {
-                iter.next();
-                Some(Token::AppendWrite)
-            }
-            &"" => {
-                iter.next();
-                None
-            }
-            _ => {
-                iter.next();
-                Some(Token::Error(SyntaxError::InvalidToken))
-            }
-        };
-        if let Some(token) = push_token {
-            tokens.push(token);
+enum Datatypes{
+    Text=0x0
+}
+pub struct Parser{
+    buffer: Vec<u8>
+}
+
+impl Parser{
+    const HEADER_SIZE:usize=8;
+    ///generates new parser
+    pub fn new()->Parser{
+        Parser{
+            buffer: vec![]
         }
     }
-    //should never rach this point
-    panic!();
-    return Err(SyntaxError::InvalidToken);
+    ///Takes in buffer if a payload is completed it is outputted in the parsed ast
+    pub fn parse(&mut self,mut buffer: &mut Vec<u8>)->Result<Vec<ParsedAST>,ParseError>{
+        self.buffer.append(&mut buffer);
+
+        let mut parsed = vec![];
+        loop{
+            if self.buffer.len()>=Self::HEADER_SIZE{
+                let data_type = u32::from_le_bytes([self.buffer[0],self.buffer[1],self.buffer[2],self.buffer[3]]);
+        
+                const TEXT_TYPE:u32 = Datatypes::Text as u32;
+                let node = match data_type{
+                    TEXT_TYPE=>self.parse_text(),
+                    _=>unimplemented!()
+                };
+                if let Some(node) = node{
+                    if node.is_ok(){
+                        parsed.push(node.ok().unwrap())
+                    }else{
+                        return Err(node.err().unwrap())
+                    }
+                }else{
+                    return Ok(parsed)
+                }
+            }else{
+                return Ok(parsed)
+            }
+            
+        }
+    }
+    //parses contents of text
+    fn parse_text(&mut self)->Option<Result<ParsedAST,ParseError>>{
+        let length = u32::from_le_bytes([self.buffer[4],self.buffer[5],self.buffer[6],self.buffer[7]]) as usize;
+        if length+Self::HEADER_SIZE <=self.buffer.len(){
+            None
+        }else{
+            let (data,remaining) = self.buffer.split_at_mut(length);
+            let string_result = String::from_utf8(data.to_vec());
+            if let Some(string) = string_result.ok(){
+                self.buffer = remaining.to_vec();
+                return Some(Ok(ParsedAST::String(string)))
+            }else{
+                return Some(Err(ParseError::StringNotUTF8))
+            }
+        }
+    }
 }
 #[cfg(test)]
-mod tests {
+mod tests{
     use super::*;
     #[test]
-    fn empty() {
-        assert_eq!(parse(String::new()), Ok(vec![]));
+    fn test_empty(){
+        let mut p = Parser::new();
+        assert_eq!(p.parse(&mut vec![]).ok().unwrap().len(),0);
     }
     #[test]
-    fn set_free() {
-        let p = parse("SET FREE\nSET APPEND".to_string());
-        assert_eq!(p, Ok(vec![Token::FreeWrite, Token::AppendWrite]));
+    fn parse_text(){
+        let mut p = Parser::new();
+        let parsed = p.parse(&mut vec![0,0,0,0, 1,0,0,0,'a' as u8]).ok().unwrap();
+        assert_eq!(parsed.len(),1);
+        assert_eq!(parsed[0],ParsedAST::String("a".to_string()));
     }
     #[test]
-    fn text() {
-        let p = parse("\"\nhello world\n\"\nDRAW TEXT(10,10)\n\"hello world\n\"".to_string());
-        assert_eq!(
-            p,
-            Ok(vec![
-                Token::DrawText {
-                    x: 0.0,
-                    y: 0.0,
-                    text: "hello world".to_string(),
-                },
-                Token::DrawText {
-                    x: 10.0,
-                    y: 10.0,
-                    text: "hello world".to_string(),
-                }
-            ])
-        );
-    }
-    #[test]
-    fn line() {
-        let p = parse("DRAW LINE(10,10,20,20)".to_string());
-        assert_eq!(
-            p,
-            Ok(vec![Token::DrawLine {
-                x_start: 10.0,
-                y_start: 10.0,
-                x_end: 20.0,
-                y_end: 20.0,
-            }])
-        );
-        let p = parse("DRAW LINE(10.0,10.0,20.0,20.0)".to_string());
-        assert_eq!(
-            p,
-            Ok(vec![Token::DrawLine {
-                x_start: 10.0,
-                y_start: 10.0,
-                x_end: 20.0,
-                y_end: 20.0,
-            }])
-        );
+    fn parse_text_partial(){
+        let mut p = Parser::new();
+        let parsed = p.parse(&mut vec![0,0,0,0, 3,0,0,0,'a' as u8]).ok().unwrap();
+        assert_eq!(parsed.len(),0);
     }
 }
