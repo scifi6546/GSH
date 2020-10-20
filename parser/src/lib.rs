@@ -1,13 +1,17 @@
 use image::RgbaImage;
 use nalgebra::Vector2;
+mod to_binary;
 /// The parsed result.
 #[derive(Debug, PartialEq)]
 pub enum ParsedAST {
     String(String),
-    Figure{
+    Figure(Figure)
+}
+#[derive(Debug, PartialEq)]
+pub struct Figure{
+  
         dimensions: Vector2<u32>,
         contents: Vec<FigureContents>
-    }
 }
 #[derive(Debug)]
 pub enum ParseError {
@@ -71,6 +75,7 @@ impl Parser {
             }
         }
     }
+    
     //parses contents of text
     fn parse_text(&mut self) -> Option<Result<ParsedAST, ParseError>> {
         let length = u32::from_le_bytes([
@@ -129,6 +134,33 @@ mod tests {
             8,0,0,0,
             5,0,0,0,
             5,0,0,0]).ok().unwrap();
-        assert_eq!(parsed[0],ParsedAST::Figure{dimensions: Vector2::new(5,5),contents: vec![]})
+        assert_eq!(parsed[0],ParsedAST::Figure(Figure{dimensions: Vector2::new(5,5),contents: vec![]}))
+    }
+    fn parse_figure_line(){
+        let mut p = Parser::new();
+        let figure_element_size = 4*4;
+        let line_size = 4+4+2*(4+4);
+        let parsed = p.parse(&mut vec![1,0,0,0,
+            8+line_size+figure_element_size,0,0,0,
+            5,0,0,0,
+            5,0,0,0,
+            //Element Type
+            1,0,0,0,
+            //Payload Length
+            line_size,0,0,0,
+            //x_start
+            0,0,0,0,
+            //y start,
+            0,0,0,0,
+            //line color
+            0,0,0,1,
+            //thickness
+            0,0,0,0,
+            //start cord
+            0,0,0,0,    0,0,0,0,
+            //end cord
+            1,0,0,0,    1,0,0,0
+            ]).ok().unwrap();
+        assert_eq!(parsed[0],ParsedAST::Figure(Figure{dimensions: Vector2::new(5,5),contents: vec![]}))
     }
 }
