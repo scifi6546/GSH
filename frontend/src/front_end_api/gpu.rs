@@ -560,7 +560,10 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
                 .unwrap();
             let mapping = self.device.map_memory(&memory, m::Segment::ALL).unwrap();
-            ptr::copy_nonoverlapping(image.as_ptr(), mapping, upload_size as usize);
+            for y in 0..image.height(){
+                ptr::copy_nonoverlapping(image.as_ptr().offset(y as isize*image_layout.height_stride as isize),mapping.offset(y as isize * row_pitch as isize) , image.width() as usize *image_layout.width_stride as usize)
+            }
+            //ptr::copy_nonoverlapping(image.as_ptr(), mapping, upload_size as usize);
             //for y in 0..image.height() as usize {
             //    let row = flat_sample.as_mut_slice();
             //    ptr::copy_nonoverlapping(
@@ -840,6 +843,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
+            cmd_buffer.set_scissors(0,&[self.viewport.rect]);
             //cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_graphics_descriptor_sets(
