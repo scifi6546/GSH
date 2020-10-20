@@ -11,7 +11,7 @@ pub enum ParsedAST {
 pub struct Figure{
   
         dimensions: Vector2<u32>,
-        contents: Vec<FigureContents>
+        contents: Vec<(FigureContents,Vector2<i32>)>
 }
 #[derive(Debug)]
 pub enum ParseError {
@@ -24,7 +24,7 @@ enum Datatypes {
 #[derive(Debug, PartialEq)]
 pub enum FigureContents{
     Image(RgbaImage),
-    Line(Line)
+    Line(Line),
 
 }
 #[derive(Debug, PartialEq)]
