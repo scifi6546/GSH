@@ -30,6 +30,7 @@ pub enum FigureContents{
 #[derive(Debug, PartialEq)]
 pub struct Line{
     pub color: u32,
+    pub thickness:f32,
     pub segments: Vec<Vector2<i32>>,
 }
 pub struct Parser {
