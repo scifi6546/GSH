@@ -15,6 +15,8 @@ pub struct Figure {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParseError {
     InvalidDatatype(u32),
+    InvalidImage,
+    InvalidLine,
     StringNotUTF8,
 }
 enum Datatypes {
@@ -35,7 +37,7 @@ pub enum FigureContentsData {
 pub struct Line {
     pub color: u32,
     pub thickness: f32,
-    pub segments: Vec<Vector2<i32>>,
+    pub segments: Vec<Vector2<f32>>,
 }
 pub struct Parser {
     buffer: Vec<u8>,
@@ -43,6 +45,7 @@ pub struct Parser {
 
 impl Parser {
     const HEADER_SIZE: usize = 8;
+    const FIGURE_HEADER_SIZW: usize = 8;
     ///generates new parser
     pub fn new() -> Parser {
         Parser { buffer: vec![] }
@@ -110,25 +113,30 @@ impl Parser {
         if self.is_complete() != true {
             return None;
         }
-        let length = u32::from_le_bytes([
+        let packet_length = u32::from_le_bytes([
             self.buffer[4],
             self.buffer[5],
             self.buffer[6],
             self.buffer[7],
         ]) as usize;
-        let x_dim = u32::from_le_bytes([
-            self.buffer[8],
-            self.buffer[9],
-            self.buffer[10],
-            self.buffer[11],
-        ]);
-        let y_dim = u32::from_le_bytes([
-            self.buffer[12],
-            self.buffer[13],
-            self.buffer[14],
-            self.buffer[15],
-        ]);
-        let figure_contents = self.buffer[8..8 + length].to_vec();
+        let dimensions = Vector2::new(
+            u32::from_le_bytes([
+                self.buffer[8],
+                self.buffer[9],
+                self.buffer[10],
+                self.buffer[11],
+            ]),
+            u32::from_le_bytes([
+                self.buffer[12],
+                self.buffer[13],
+                self.buffer[14],
+                self.buffer[15],
+            ]),
+        );
+
+        //figure-buffer
+        let figure_contents =
+            self.buffer[8 + 8..8 + 8 + packet_length - Self::FIGURE_HEADER_SIZW].to_vec();
         let mut i = 0;
         let mut figure_data = vec![];
         loop {
@@ -165,17 +173,64 @@ impl Parser {
                 data.push(f);
             }
         }
+        self.buffer = self.buffer[packet_length + Self::HEADER_SIZE..self.buffer.len()].to_vec();
         let figure = Figure {
             contents: data,
-            dimensions: Vector2::new(x_dim, y_dim),
+            dimensions,
         };
         return Some(Ok(ParsedAST::Figure(figure)));
     }
-    fn parse_picture_element(_data: &Vec<u8>) -> Result<FigureContents, ParseError> {
-        unimplemented!();
+    fn parse_picture_element(data: &Vec<u8>) -> Result<FigureContents, ParseError> {
+        if data.len() < 6*4 {
+            return Err(ParseError::InvalidImage);
+        }
+        let position = Vector2::new(
+            i32::from_le_bytes([data[8+0], data[8+1], data[8+2], data[8+3]]),
+            i32::from_le_bytes([data[8+4], data[8+5], data[8+6], data[8+7]]),
+        );
+
+        let dimensions = Vector2::new(
+            u32::from_le_bytes([data[16+0], data[16+1], data[16+2], data[16+3]]),
+            u32::from_le_bytes([data[16+4], data[16+5], data[16+6], data[16+7]]),
+        );
+        if let Some(image) = RgbaImage::from_raw(dimensions.x,dimensions.y,data[8..data.len()].to_vec()){
+            return Ok(FigureContents{
+                data:FigureContentsData::Image(image),
+                position
+            })
+
+        }
+        return Err(ParseError::InvalidImage)
+
     }
-    fn parse_line_element(_data: &Vec<u8>) -> Result<FigureContents, ParseError> {
-        unimplemented!();
+    fn parse_line_element(data: &Vec<u8>) -> Result<FigureContents, ParseError> {
+        if data.len()<6*4{
+            return Err(ParseError::InvalidLine);
+        }
+        let position = Vector2::new(
+            i32::from_le_bytes([data[8+0], data[8+1], data[8+2], data[8+3]]),
+            i32::from_le_bytes([data[8+4], data[8+5], data[8+6], data[8+7]]),
+        );
+        let color = u32::from_le_bytes([data[16+0],data[16+1],data[16+2],data[16+3]]);
+        let thickness = f32::from_le_bytes([data[16+4],data[16+1],data[16+2],data[16+3]]);
+        let mut segments = vec![];
+        for i in 0..data.len()/4-(4+2){
+            let index = i*4;
+            segments.push(Vector2::new(f32::from_le_bytes([data[index+0],data[index+1],data[index+2],data[index+3]]),
+            f32::from_le_bytes([data[index+4],data[index+5],data[index+6],data[index+7]])));
+
+
+        }
+        return Ok(FigureContents{
+            data:FigureContentsData::Line(Line{
+                color,
+                thickness,
+                segments,
+            }),
+
+            position,
+
+        })
     }
     /// Gets if current packet is complete
     fn is_complete(&self) -> bool {
@@ -226,8 +281,9 @@ mod tests {
     #[test]
     fn parse_figure() {
         let mut p = Parser::new();
-        let parsed_res = p.parse(&mut vec![1, 0, 0, 0,
-            8, 0, 0, 0,
+        #[rustfmt::skip]
+        let parsed_res = p.parse(&mut vec![1, 0, 0, 0, 
+            8, 0, 0, 0, 
             5, 0, 0, 0,
             5, 0, 0, 0]);
         if parsed_res.is_err() {

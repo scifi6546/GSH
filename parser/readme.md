@@ -44,7 +44,17 @@ The data contains a list of elements in the figure.
 ```
 ### Picture Figure Element
 Element type: 0
-Data is png encoded bytes
+Data is raw RGBA data
+```
+|@+0 | @+1 | @+2 | @+3 | @+4 | @+5 | @+6 | @+7|
+|----|-----|-----|-----|-----|-----|-----|----|
+| <--x dim (pixels)--> | <--y dim (pixels)--> |
+|---------------Data--------------------------|
+                    .
+                    .
+                    .
+|---------------Data--------------------------|
+```
 
 ### line Figure Element
 element type: 1

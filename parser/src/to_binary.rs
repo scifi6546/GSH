@@ -86,6 +86,9 @@ fn build_packet(data_type: u32, data: &mut Vec<u8>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FigureContents;
+    use image::RgbaImage;
+
     #[test]
     fn text() {
         let t = build_text("hello world".to_string());
@@ -117,7 +120,7 @@ mod tests {
                 data: FigureContentsData::Line(Line {
                     color: 0x00_00_00_ff,
                     thickness: 1.0,
-                    segments: vec![Vector2::new(0, 0), Vector2::new(1, 1)],
+                    segments: vec![Vector2::new(0.0, 0.0), Vector2::new(1.0, 1.0)],
                 }),
                 position: Vector2::new(0, 0),
             }],
