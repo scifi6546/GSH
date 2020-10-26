@@ -2,35 +2,39 @@ use image::RgbaImage;
 use nalgebra::Vector2;
 mod to_binary;
 /// The parsed result.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParsedAST {
     String(String),
-    Figure(Figure)
+    Figure(Figure),
 }
-#[derive(Debug, PartialEq)]
-pub struct Figure{
-  
-        dimensions: Vector2<u32>,
-        contents: Vec<(FigureContents,Vector2<i32>)>
+#[derive(Debug, PartialEq, Clone)]
+pub struct Figure {
+    dimensions: Vector2<u32>,
+    contents: Vec<FigureContents>,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParseError {
     InvalidDatatype(u32),
     StringNotUTF8,
 }
 enum Datatypes {
     Text = 0x0,
+    Figure = 0x1,
 }
-#[derive(Debug, PartialEq)]
-pub enum FigureContents{
+#[derive(Debug, PartialEq, Clone)]
+pub struct FigureContents {
+    data: FigureContentsData,
+    position: Vector2<i32>,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub enum FigureContentsData {
     Image(RgbaImage),
     Line(Line),
-
 }
-#[derive(Debug, PartialEq)]
-pub struct Line{
+#[derive(Debug, PartialEq, Clone)]
+pub struct Line {
     pub color: u32,
-    pub thickness:f32,
+    pub thickness: f32,
     pub segments: Vec<Vector2<i32>>,
 }
 pub struct Parser {
@@ -58,8 +62,10 @@ impl Parser {
                 ]);
 
                 const TEXT_TYPE: u32 = Datatypes::Text as u32;
+                const FIGURE_TYPE: u32 = Datatypes::Figure as u32;
                 let node = match data_type {
                     TEXT_TYPE => self.parse_text(),
+                    FIGURE_TYPE => self.parse_figure(),
                     _ => Some(Err(ParseError::InvalidDatatype(data_type))),
                 };
                 if let Some(node) = node {
@@ -76,7 +82,7 @@ impl Parser {
             }
         }
     }
-    
+
     //parses contents of text
     fn parse_text(&mut self) -> Option<Result<ParsedAST, ParseError>> {
         let length = u32::from_le_bytes([
@@ -88,8 +94,8 @@ impl Parser {
         if length + Self::HEADER_SIZE > self.buffer.len() {
             None
         } else {
-            let (data_and_header, remaining) = self.buffer.split_at_mut(length+Self::HEADER_SIZE);
-            let (_,data) = data_and_header.split_at_mut(Self::HEADER_SIZE);
+            let (data_and_header, remaining) = self.buffer.split_at_mut(length + Self::HEADER_SIZE);
+            let (_, data) = data_and_header.split_at_mut(Self::HEADER_SIZE);
             let string_result = String::from_utf8(data.to_vec());
             if let Some(string) = string_result.ok() {
                 self.buffer = remaining.to_vec();
@@ -97,6 +103,95 @@ impl Parser {
             } else {
                 return Some(Err(ParseError::StringNotUTF8));
             }
+        }
+    }
+    /// Parses figure
+    fn parse_figure(&mut self) -> Option<Result<ParsedAST, ParseError>> {
+        if self.is_complete() != true {
+            return None;
+        }
+        let length = u32::from_le_bytes([
+            self.buffer[4],
+            self.buffer[5],
+            self.buffer[6],
+            self.buffer[7],
+        ]) as usize;
+        let x_dim = u32::from_le_bytes([
+            self.buffer[8],
+            self.buffer[9],
+            self.buffer[10],
+            self.buffer[11],
+        ]);
+        let y_dim = u32::from_le_bytes([
+            self.buffer[12],
+            self.buffer[13],
+            self.buffer[14],
+            self.buffer[15],
+        ]);
+        let figure_contents = self.buffer[8..8 + length].to_vec();
+        let mut i = 0;
+        let mut figure_data = vec![];
+        loop {
+            if i >= figure_contents.len() {
+                break;
+            }
+            let size = u32::from_le_bytes([
+                figure_contents[i + 4],
+                figure_contents[i + 5],
+                figure_contents[i + 6],
+                figure_contents[i + 7],
+            ]);
+            figure_data.push(figure_contents[i..i + size as usize + 16].to_vec());
+            i += size as usize + 16;
+        }
+        let figures: Vec<Result<FigureContents, ParseError>> = figure_data
+            .iter()
+            .map(|data| {
+                let data_type = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+                match data_type {
+                    0 => Self::parse_picture_element(data),
+                    1 => Self::parse_line_element(data),
+                    _ => Err(ParseError::InvalidDatatype(3)),
+                }
+            })
+            .collect();
+        let mut data = vec![];
+
+        for fig in figures.iter() {
+            if fig.is_err() {
+                return Some(Err(fig.clone().err().unwrap()));
+            }
+            if let Some(f) = fig.clone().ok() {
+                data.push(f);
+            }
+        }
+        let figure = Figure {
+            contents: data,
+            dimensions: Vector2::new(x_dim, y_dim),
+        };
+        return Some(Ok(ParsedAST::Figure(figure)));
+    }
+    fn parse_picture_element(_data: &Vec<u8>) -> Result<FigureContents, ParseError> {
+        unimplemented!();
+    }
+    fn parse_line_element(_data: &Vec<u8>) -> Result<FigureContents, ParseError> {
+        unimplemented!();
+    }
+    /// Gets if current packet is complete
+    fn is_complete(&self) -> bool {
+        if self.buffer.len() < 8 {
+            return false;
+        }
+        let data_size = u32::from_le_bytes([
+            self.buffer[4],
+            self.buffer[5],
+            self.buffer[6],
+            self.buffer[7],
+        ]);
+        if self.buffer.len() >= data_size as usize + 8 {
+            return true;
+        } else {
+            return false;
         }
     }
 }
@@ -129,39 +224,103 @@ mod tests {
         assert_eq!(parsed.len(), 0);
     }
     #[test]
-    fn parse_figure(){
+    fn parse_figure() {
         let mut p = Parser::new();
-        let parsed = p.parse(&mut vec![1,0,0,0,
-            8,0,0,0,
-            5,0,0,0,
-            5,0,0,0]).ok().unwrap();
-        assert_eq!(parsed[0],ParsedAST::Figure(Figure{dimensions: Vector2::new(5,5),contents: vec![]}))
+        let parsed_res = p.parse(&mut vec![1, 0, 0, 0,
+            8, 0, 0, 0,
+            5, 0, 0, 0,
+            5, 0, 0, 0]);
+        if parsed_res.is_err() {
+            panic!("{:?}", parsed_res.err().unwrap());
+        }
+        assert_eq!(
+            parsed_res.ok().unwrap()[0],
+            ParsedAST::Figure(Figure {
+                dimensions: Vector2::new(5, 5),
+                contents: vec![]
+            })
+        )
     }
-    fn parse_figure_line(){
+    #[test]
+    fn parse_figure_line() {
         let mut p = Parser::new();
-        let figure_element_size = 4*4;
-        let line_size = 4+4+2*(4+4);
-        let parsed = p.parse(&mut vec![1,0,0,0,
-            8+line_size+figure_element_size,0,0,0,
-            5,0,0,0,
-            5,0,0,0,
+        let figure_element_size = 4 * 4;
+        let line_size = 4 + 4 + 2 * (4 + 4);
+        let parsed_res = p.parse(&mut vec![
+            1,
+            0,
+            0,
+            0,
+            8 + line_size + figure_element_size,
+            0,
+            0,
+            0,
+            5,
+            0,
+            0,
+            0,
+            5,
+            0,
+            0,
+            0,
             //Element Type
-            1,0,0,0,
+            1,
+            0,
+            0,
+            0,
             //Payload Length
-            line_size,0,0,0,
+            line_size,
+            0,
+            0,
+            0,
             //x_start
-            0,0,0,0,
+            0,
+            0,
+            0,
+            0,
             //y start,
-            0,0,0,0,
+            0,
+            0,
+            0,
+            0,
             //line color
-            0,0,0,1,
+            0,
+            0,
+            0,
+            1,
             //thickness
-            0,0,0,0,
+            0,
+            0,
+            0,
+            0,
             //start cord
-            0,0,0,0,    0,0,0,0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             //end cord
-            1,0,0,0,    1,0,0,0
-            ]).ok().unwrap();
-        assert_eq!(parsed[0],ParsedAST::Figure(Figure{dimensions: Vector2::new(5,5),contents: vec![]}))
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+        ]);
+        if parsed_res.is_err() {
+            panic!("{:?}", parsed_res.err().unwrap());
+        }
+        assert_eq!(
+            parsed_res.ok().unwrap()[0],
+            ParsedAST::Figure(Figure {
+                dimensions: Vector2::new(5, 5),
+                contents: vec![]
+            })
+        )
     }
 }
