@@ -181,56 +181,66 @@ impl Parser {
         return Some(Ok(ParsedAST::Figure(figure)));
     }
     fn parse_picture_element(data: &Vec<u8>) -> Result<FigureContents, ParseError> {
-        if data.len() < 6*4 {
+        if data.len() < 6 * 4 {
             return Err(ParseError::InvalidImage);
         }
         let position = Vector2::new(
-            i32::from_le_bytes([data[8+0], data[8+1], data[8+2], data[8+3]]),
-            i32::from_le_bytes([data[8+4], data[8+5], data[8+6], data[8+7]]),
+            i32::from_le_bytes([data[8 + 0], data[8 + 1], data[8 + 2], data[8 + 3]]),
+            i32::from_le_bytes([data[8 + 4], data[8 + 5], data[8 + 6], data[8 + 7]]),
         );
 
         let dimensions = Vector2::new(
-            u32::from_le_bytes([data[16+0], data[16+1], data[16+2], data[16+3]]),
-            u32::from_le_bytes([data[16+4], data[16+5], data[16+6], data[16+7]]),
+            u32::from_le_bytes([data[16 + 0], data[16 + 1], data[16 + 2], data[16 + 3]]),
+            u32::from_le_bytes([data[16 + 4], data[16 + 5], data[16 + 6], data[16 + 7]]),
         );
-        if let Some(image) = RgbaImage::from_raw(dimensions.x,dimensions.y,data[8..data.len()].to_vec()){
-            return Ok(FigureContents{
-                data:FigureContentsData::Image(image),
-                position
-            })
-
+        if let Some(image) =
+            RgbaImage::from_raw(dimensions.x, dimensions.y, data[8..data.len()].to_vec())
+        {
+            return Ok(FigureContents {
+                data: FigureContentsData::Image(image),
+                position,
+            });
         }
-        return Err(ParseError::InvalidImage)
-
+        return Err(ParseError::InvalidImage);
     }
     fn parse_line_element(data: &Vec<u8>) -> Result<FigureContents, ParseError> {
-        if data.len()<6*4{
+        if data.len() < 6 * 4 {
             return Err(ParseError::InvalidLine);
         }
         let position = Vector2::new(
-            i32::from_le_bytes([data[8+0], data[8+1], data[8+2], data[8+3]]),
-            i32::from_le_bytes([data[8+4], data[8+5], data[8+6], data[8+7]]),
+            i32::from_le_bytes([data[8 + 0], data[8 + 1], data[8 + 2], data[8 + 3]]),
+            i32::from_le_bytes([data[8 + 4], data[8 + 5], data[8 + 6], data[8 + 7]]),
         );
-        let color = u32::from_le_bytes([data[16+0],data[16+1],data[16+2],data[16+3]]);
-        let thickness = f32::from_le_bytes([data[16+4],data[16+1],data[16+2],data[16+3]]);
+        let color = u32::from_le_bytes([data[16 + 0], data[16 + 1], data[16 + 2], data[16 + 3]]);
+        let thickness =
+            f32::from_le_bytes([data[16 + 4], data[16 + 1], data[16 + 2], data[16 + 3]]);
         let mut segments = vec![];
-        for i in 0..data.len()/4-(4+2){
-            let index = i*4;
-            segments.push(Vector2::new(f32::from_le_bytes([data[index+0],data[index+1],data[index+2],data[index+3]]),
-            f32::from_le_bytes([data[index+4],data[index+5],data[index+6],data[index+7]])));
-
-
+        for i in 0..data.len() / 4 - (4 + 2) {
+            let index = i * 4;
+            segments.push(Vector2::new(
+                f32::from_le_bytes([
+                    data[index + 0],
+                    data[index + 1],
+                    data[index + 2],
+                    data[index + 3],
+                ]),
+                f32::from_le_bytes([
+                    data[index + 4],
+                    data[index + 5],
+                    data[index + 6],
+                    data[index + 7],
+                ]),
+            ));
         }
-        return Ok(FigureContents{
-            data:FigureContentsData::Line(Line{
+        return Ok(FigureContents {
+            data: FigureContentsData::Line(Line {
                 color,
                 thickness,
                 segments,
             }),
 
             position,
-
-        })
+        });
     }
     /// Gets if current packet is complete
     fn is_complete(&self) -> bool {
@@ -302,71 +312,30 @@ mod tests {
         let mut p = Parser::new();
         let figure_element_size = 4 * 4;
         let line_size = 4 + 4 + 2 * (4 + 4);
+        #[rustfmt::skip]
         let parsed_res = p.parse(&mut vec![
-            1,
-            0,
-            0,
-            0,
-            8 + line_size + figure_element_size,
-            0,
-            0,
-            0,
-            5,
-            0,
-            0,
-            0,
-            5,
-            0,
-            0,
-            0,
+            1,0,0,0,
+            8 + line_size + figure_element_size,0,0,0,
+            5,0,0,0,
+            5,0,0,0,
             //Element Type
-            1,
-            0,
-            0,
-            0,
+            1,0,0,0,
             //Payload Length
-            line_size,
-            0,
-            0,
-            0,
+            line_size,0,0,0,0,
             //x_start
-            0,
-            0,
-            0,
-            0,
+            0,0,0,0,
             //y start,
-            0,
-            0,
-            0,
-            0,
+            0,0,0,0,
             //line color
-            0,
-            0,
-            0,
-            1,
+            0,0,0,1,
             //thickness
-            0,
-            0,
-            0,
-            0,
+            0,0,0,0,
             //start cord
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
+            0,0,0,0,
+            0,0,0,0,
             //end cord
-            1,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
+            1,0,0,0,
+            1,0,0,0,
         ]);
         if parsed_res.is_err() {
             panic!("{:?}", parsed_res.err().unwrap());
@@ -375,7 +344,14 @@ mod tests {
             parsed_res.ok().unwrap()[0],
             ParsedAST::Figure(Figure {
                 dimensions: Vector2::new(5, 5),
-                contents: vec![]
+                contents: vec![FigureContents {
+                    data: FigureContentsData::Line(Line {
+                        color: 0x00_00_00_01,
+                        thickness: 0.0,
+                        segments: vec![Vector2::new(0.0, 0.0), Vector2::new(1.0, 1.0)]
+                    }),
+                    position: Vector2::new(0, 0)
+                }]
             })
         )
     }
