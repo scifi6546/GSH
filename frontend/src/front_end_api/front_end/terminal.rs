@@ -1,6 +1,5 @@
 use super::{DrawCall, Event, Model, ModelId, Scene, SceneCtor, Texture, TextureId};
 use image::Rgba;
-use font_kit::source::SystemSource;
 use nalgebra::{Vector2, Vector3};
 use font_renderer::Renderer;
 pub struct Terminal {
@@ -40,7 +39,7 @@ impl Terminal {
 impl Scene for Terminal {
     fn get_draw_calls(&self) -> Vec<DrawCall> {
         //gets draw calls from sub scenes
-        let mut texture = image::RgbaImage::from_pixel(
+        let texture = image::RgbaImage::from_pixel(
             1000,
             1000,
             Rgba([self.input_buffer.len() as u8, 0, 25, 255]),

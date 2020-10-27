@@ -18,7 +18,6 @@ use std::{
     mem::{self, ManuallyDrop},
     ptr,
 };
-use image::RgbaImage;
 pub struct GPU<B: gfx_hal::Backend> {
     device: B::Device,
     queue_group: QueueGroup<B>,
@@ -505,7 +504,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         );
     }
     pub fn load_textures(&mut self, image: &image::RgbaImage) -> TextureAllocation<B> {
-        println!("dimensions: {} {}",image.width(),image.height());
+        println!("dimensions: {} {}", image.width(), image.height());
         let limits = self.adapter.physical_device.limits();
         let non_coherent_alignment = limits.non_coherent_atom_size as u64;
         let kind = i::Kind::D2(image.width() as i::Size, image.height() as i::Size, 1, 1);
@@ -514,7 +513,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         let row_pitch =
             (image.width() * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
         let upload_size = (image.height() * row_pitch) as u64;
-        println!("row pitch: {}",row_pitch);
+        println!("row pitch: {}", row_pitch);
         let padded_upload_size = ((upload_size + non_coherent_alignment - 1)
             / non_coherent_alignment)
             * non_coherent_alignment;
@@ -546,11 +545,11 @@ impl<B: gfx_hal::Backend> GPU<B> {
             .into();
         let image_mem_reqs = unsafe { self.device.get_buffer_requirements(&image_upload_buffer) };
         // copy image data into staging buffer
-        
+
         //checking preconditions
         let image_layout = image.as_flat_samples().layout;
-        assert_eq!(image_layout.width_stride,4);
-        assert_eq!(image_layout.height_stride,4*image_layout.width as usize);
+        assert_eq!(image_layout.width_stride, 4);
+        assert_eq!(image_layout.height_stride, 4 * image_layout.width as usize);
         let image_upload_memory = unsafe {
             let memory = self
                 .device
@@ -560,8 +559,14 @@ impl<B: gfx_hal::Backend> GPU<B> {
                 .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
                 .unwrap();
             let mapping = self.device.map_memory(&memory, m::Segment::ALL).unwrap();
-            for y in 0..image.height(){
-                ptr::copy_nonoverlapping(image.as_ptr().offset(y as isize*image_layout.height_stride as isize),mapping.offset(y as isize * row_pitch as isize) , image.width() as usize *image_layout.width_stride as usize)
+            for y in 0..image.height() {
+                ptr::copy_nonoverlapping(
+                    image
+                        .as_ptr()
+                        .offset(y as isize * image_layout.height_stride as isize),
+                    mapping.offset(y as isize * row_pitch as isize),
+                    image.width() as usize * image_layout.width_stride as usize,
+                )
             }
             //ptr::copy_nonoverlapping(image.as_ptr(), mapping, upload_size as usize);
             //for y in 0..image.height() as usize {
@@ -734,7 +739,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         }
     }
     pub unsafe fn destroy_texture(&mut self, texture: &mut TextureAllocation<B>) {
-        assert_eq!(texture.freed,false);
+        assert_eq!(texture.freed, false);
         self.device
             .destroy_buffer(ManuallyDrop::take(&mut (texture).image_upload_buffer));
         self.device
@@ -747,7 +752,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             .destroy_image_view(ManuallyDrop::take(&mut (*texture).image_srv));
         self.device
             .destroy_sampler(ManuallyDrop::take(&mut (*texture).sampler));
-        texture.freed=true;
+        texture.freed = true;
     }
     pub unsafe fn bind_texture(
         texture: *const TextureAllocation<B>,
@@ -787,7 +792,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
         self.viewport.rect.w = extent.width as _;
         self.viewport.rect.h = extent.height as _;
     }
-    pub fn change_resolution(&mut self,new_size: window::Extent2D){
+    pub fn change_resolution(&mut self, new_size: window::Extent2D) {
         self.dimensions = new_size;
         self.recreate_swapchain();
     }
@@ -843,7 +848,7 @@ impl<B: gfx_hal::Backend> GPU<B> {
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0,&[self.viewport.rect]);
+            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             //cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_graphics_descriptor_sets(
