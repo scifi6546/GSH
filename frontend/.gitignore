@@ -1,2 +1,7 @@
 /target
 Cargo.lock
+capture
+capture_settings
+flamegraph.svg
+perf.data
+perf.data.old
