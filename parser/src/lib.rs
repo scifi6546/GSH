@@ -159,7 +159,7 @@ impl Parser {
                 match data_type {
                     0 => Self::parse_picture_element(data),
                     1 => Self::parse_line_element(data),
-                    _ => Err(ParseError::InvalidDatatype(3)),
+                    _ => Err(ParseError::InvalidDatatype(data_type)),
                 }
             })
             .collect();
@@ -204,6 +204,21 @@ impl Parser {
         return Err(ParseError::InvalidImage);
     }
     fn parse_line_element(data: &Vec<u8>) -> Result<FigureContents, ParseError> {
+        for i in 0..data.len() / 4 {
+            println!(
+                "{:2x} {:2x} {:2x} {:2x}   {:2}",
+                data[4 * i + 0],
+                data[4 * i + 1],
+                data[4 * i + 2],
+                data[4 * i + 3],
+                f32::from_le_bytes([
+                    data[4 * i + 0],
+                    data[4 * i + 1],
+                    data[4 * i + 2],
+                    data[4 * i + 3]
+                ])
+            );
+        }
         if data.len() < 6 * 4 {
             return Err(ParseError::InvalidLine);
         }
@@ -213,10 +228,10 @@ impl Parser {
         );
         let color = u32::from_le_bytes([data[16 + 0], data[16 + 1], data[16 + 2], data[16 + 3]]);
         let thickness =
-            f32::from_le_bytes([data[16 + 4], data[16 + 1], data[16 + 2], data[16 + 3]]);
+            f32::from_le_bytes([data[16 + 0], data[16 + 1], data[16 + 2], data[16 + 3]]);
         let mut segments = vec![];
-        for i in 0..data.len() / 4 - (4 + 2) {
-            let index = i * 4;
+        for i in (4)..(data.len() / 8) {
+            let index = i * 8;
             segments.push(Vector2::new(
                 f32::from_le_bytes([
                     data[index + 0],
@@ -312,6 +327,9 @@ mod tests {
         let mut p = Parser::new();
         let figure_element_size = 4 * 4;
         let line_size = 4 + 4 + 2 * (4 + 4);
+        let t_bytes = (1.0 as f32).to_le_bytes();
+        let e_bytes = (1.0 as f32).to_le_bytes();
+        let s_bytes = (0.0 as f32).to_le_bytes();
         #[rustfmt::skip]
         let parsed_res = p.parse(&mut vec![
             1,0,0,0,
@@ -329,13 +347,13 @@ mod tests {
             //line color
             0,0,0,1,
             //thickness
-            0,0,0,0,
+            t_bytes[0],t_bytes[1],t_bytes[2],t_bytes[3],
             //start cord
             0,0,0,0,
             0,0,0,0,
             //end cord
-            1,0,0,0,
-            1,0,0,0,
+            e_bytes[0],e_bytes[1],e_bytes[2],e_bytes[3],
+            e_bytes[0],e_bytes[1],e_bytes[2],e_bytes[3],
         ]);
         if parsed_res.is_err() {
             panic!("{:?}", parsed_res.err().unwrap());
@@ -347,7 +365,7 @@ mod tests {
                 contents: vec![FigureContents {
                     data: FigureContentsData::Line(Line {
                         color: 0x00_00_00_01,
-                        thickness: 0.0,
+                        thickness: 1.0,
                         segments: vec![Vector2::new(0.0, 0.0), Vector2::new(1.0, 1.0)]
                     }),
                     position: Vector2::new(0, 0)
