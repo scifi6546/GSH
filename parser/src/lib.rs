@@ -204,20 +204,9 @@ impl Parser {
         return Err(ParseError::InvalidImage);
     }
     fn parse_line_element(data: &Vec<u8>) -> Result<FigureContents, ParseError> {
-        for i in 0..data.len() / 4 {
-            println!(
-                "{:2x} {:2x} {:2x} {:2x}   {:2}",
-                data[4 * i + 0],
-                data[4 * i + 1],
-                data[4 * i + 2],
-                data[4 * i + 3],
-                f32::from_le_bytes([
-                    data[4 * i + 0],
-                    data[4 * i + 1],
-                    data[4 * i + 2],
-                    data[4 * i + 3]
-                ])
-            );
+        if data.len()%4!=0{
+            return Err(ParseError::InvalidLine)
+
         }
         if data.len() < 6 * 4 {
             return Err(ParseError::InvalidLine);
@@ -228,9 +217,9 @@ impl Parser {
         );
         let color = u32::from_le_bytes([data[16 + 0], data[16 + 1], data[16 + 2], data[16 + 3]]);
         let thickness =
-            f32::from_le_bytes([data[16 + 0], data[16 + 1], data[16 + 2], data[16 + 3]]);
+            f32::from_le_bytes([data[16 + 4], data[16 + 5], data[16 + 6], data[16 + 7]]);
         let mut segments = vec![];
-        for i in (4)..(data.len() / 8) {
+        for i in (3)..(data.len() / 8) {
             let index = i * 8;
             segments.push(Vector2::new(
                 f32::from_le_bytes([
@@ -327,25 +316,28 @@ mod tests {
         let mut p = Parser::new();
         let figure_element_size = 4 * 4;
         let line_size = 4 + 4 + 2 * (4 + 4);
+    
         let t_bytes = (1.0 as f32).to_le_bytes();
+        assert_eq!(t_bytes.len(),4);
         let e_bytes = (1.0 as f32).to_le_bytes();
         let s_bytes = (0.0 as f32).to_le_bytes();
+        let size_bytes = ((8 + line_size + figure_element_size) as u32).to_le_bytes();
         #[rustfmt::skip]
         let parsed_res = p.parse(&mut vec![
             1,0,0,0,
-            8 + line_size + figure_element_size,0,0,0,
+            size_bytes[0],size_bytes[1],size_bytes[2],size_bytes[3],
             5,0,0,0,
             5,0,0,0,
             //Element Type
             1,0,0,0,
             //Payload Length
-            line_size,0,0,0,0,
+            line_size,0,0,0,
             //x_start
             0,0,0,0,
             //y start,
             0,0,0,0,
             //line color
-            0,0,0,1,
+            0xff,0,0,0,
             //thickness
             t_bytes[0],t_bytes[1],t_bytes[2],t_bytes[3],
             //start cord
@@ -364,7 +356,7 @@ mod tests {
                 dimensions: Vector2::new(5, 5),
                 contents: vec![FigureContents {
                     data: FigureContentsData::Line(Line {
-                        color: 0x00_00_00_01,
+                        color: 0x00_00_00_ff,
                         thickness: 1.0,
                         segments: vec![Vector2::new(0.0, 0.0), Vector2::new(1.0, 1.0)]
                     }),
