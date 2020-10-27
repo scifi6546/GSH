@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn text() {
-        let t = build_text("hello world".to_string());
+        build_text("hello world".to_string());
     }
     #[test]
     fn empty_fig() {

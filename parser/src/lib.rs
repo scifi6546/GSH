@@ -341,8 +341,8 @@ mod tests {
             //thickness
             t_bytes[0],t_bytes[1],t_bytes[2],t_bytes[3],
             //start cord
-            0,0,0,0,
-            0,0,0,0,
+            s_bytes[0],s_bytes[1],s_bytes[2],s_bytes[3],
+            s_bytes[0],s_bytes[1],s_bytes[2],s_bytes[3],
             //end cord
             e_bytes[0],e_bytes[1],e_bytes[2],e_bytes[3],
             e_bytes[0],e_bytes[1],e_bytes[2],e_bytes[3],
