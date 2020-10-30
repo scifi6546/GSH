@@ -2,11 +2,30 @@ use super::{DrawCall, Event, Model, ModelId, Scene, SceneCtor, Texture, TextureI
 use image::Rgba;
 use nalgebra::{Vector2, Vector3};
 use font_renderer::Renderer;
+use parser::{Deserializer,serializer,ParsedAST};
+mod io;
+mod render_surfaces;
 pub struct Terminal {
     terminal_mesh: ModelId,
     texture: TextureId,
     input_buffer: String,
+    front_end: io::FrontEnd,
+    deseralizer: Deserializer,
+    rendering_buffer: Vec<(ParsedAST,DrawObject)>,
     font: Renderer,
+}
+enum DrawObject{
+    Text,
+}
+impl DrawObject{
+    pub fn from_ast(ast: &ParsedAST)->Self{
+        match ast{
+            ParsedAST::String(_) => todo!(),
+            _ =>todo!()
+        }
+
+    }
+
 }
 impl Terminal {
     pub fn new() -> SceneCtor<Self> {
@@ -31,13 +50,30 @@ impl Terminal {
                 terminal_mesh: model[0].clone(),
                 texture: textures[0].clone(),
                 input_buffer: "".to_string(),
-                font: Renderer::new()
+                font: Renderer::new(),
+                rendering_buffer: vec![],
+                deseralizer: Deserializer::new(),
+                front_end: io::FrontEnd::new(io::Settings{command: "foo".to_string()}),
             }),
         )
     }
 }
+impl Terminal{
+    /// Returns output given input
+    fn process_layout(&self){
+        unimplemented!()
+    }
+
+}
 impl Scene for Terminal {
-    fn get_draw_calls(&self) -> Vec<DrawCall> {
+    fn get_draw_calls(&mut self) -> Vec<DrawCall> {
+        self.front_end.send_input(serializer::build_text(self.input_buffer.chars().map(|c|c).collect()));
+
+        if let Some(mut new_ast) = self.deseralizer.parse(&mut self.front_end.poll_output()).ok(){
+            let mut ast = new_ast.iter().map(|a| (a.clone(),DrawObject::from_ast(a))).collect();
+            self.rendering_buffer.append(&mut ast);
+
+        }
         //gets draw calls from sub scenes
         let texture = image::RgbaImage::from_pixel(
             1000,

@@ -167,6 +167,6 @@ pub type SceneCtor<S> = (
 );
 //Trait to be used by terminal horizontal split, vertiocal split and regular terminal will
 pub trait Scene {
-    fn get_draw_calls(&self) -> Vec<DrawCall>;
+    fn get_draw_calls(&mut self) -> Vec<DrawCall>;
     fn process_event(&mut self, event: Event);
 }

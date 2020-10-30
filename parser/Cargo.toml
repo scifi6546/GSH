@@ -1,5 +1,5 @@
 [package]
-name = "new_term_parser"
+name = "parser"
 version = "0.1.0"
 authors = ["Nicholas Alexeev <nickalexeev@protonmail.com>"]
 edition = "2018"
