@@ -1,11 +1,13 @@
 mod terminal;
 pub use super::{ModelId, TextureId};
 use nalgebra::{Vector2, Vector3};
+use std::cell::RefCell;
 pub use terminal::Terminal;
 pub struct Texture {
     pub image: image::RgbaImage,
 }
 
+#[derive(Debug)]
 pub struct Model {
     pub mesh: Vec<(Vector3<f32>, Vector2<f32>)>,
     pub indicies: Vec<u32>,
@@ -20,6 +22,10 @@ pub enum DrawCall {
     UpdateTexture {
         texture: TextureId,
         new_texture: image::RgbaImage,
+    },
+    NewModel {
+        model: Model,
+        id: RefCell<Option<ModelId>>,
     },
 }
 //any key that is not a letter

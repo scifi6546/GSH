@@ -27,18 +27,19 @@ pub use front_end::{Model, Terminal, Texture};
 mod gpu;
 use gfx_hal::{prelude::*, window};
 use gpu::{ModelAllocation, TextureAllocation, DEFAULT_SIZE, GPU};
+use handy::{Handle, HandleMap};
 #[derive(Clone, Debug)]
 pub struct ModelId {
-    id: usize,
+    id: Handle,
 }
 #[derive(Clone, Debug)]
 pub struct TextureId {
-    id: usize,
+    id: Handle,
 }
 struct Context<B: gfx_hal::Backend, E: Scene> {
     front_end: E,
-    mesh_allocation: Vec<ModelAllocation<B>>,
-    texture_allocation: Vec<TextureAllocation<B>>,
+    mesh_allocation: HandleMap<ModelAllocation<B>>,
+    texture_allocation: HandleMap<TextureAllocation<B>>,
     gpu: GPU<B>,
 }
 impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
@@ -50,20 +51,19 @@ impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
     ) -> Self {
         let mut gpu = GPU::new(instance, surface, adapter);
         let (mut models, mut textures, engine_ctor) = scene_ctor();
-        let mesh_allocation: Vec<ModelAllocation<B>> = models
+        let mut mesh_allocation = HandleMap::new();
+        let model_ids = models
             .iter_mut()
-            .map(|model| gpu.load_verticies(&mut model.mesh))
+            .map(|model| ModelId {
+                id: mesh_allocation.insert(gpu.load_verticies(&mut model.mesh)),
+            })
             .collect();
-        let texture_allocation: Vec<TextureAllocation<B>> = textures
+        let mut texture_allocation = HandleMap::new();
+        let texture_ids = textures
             .iter_mut()
-            .map(|texture| gpu.load_textures(&mut texture.image))
-            .collect();
-        //TODO get model id
-        let model_ids = (0..mesh_allocation.len())
-            .map(|x| ModelId { id: x })
-            .collect();
-        let texture_ids = (0..texture_allocation.len())
-            .map(|x| TextureId { id: x })
+            .map(|texture| TextureId {
+                id: texture_allocation.insert(gpu.load_textures(&mut texture.image)),
+            })
             .collect();
         Context {
             front_end: engine_ctor(model_ids, texture_ids),
@@ -95,6 +95,7 @@ impl<B: gfx_hal::Backend, E: Scene> Context<B, E> {
                     &mut self.texture_allocation[texture.id] as *mut TextureAllocation<B>,
                     new_texture,
                 )),
+                DrawCall::NewModel { .. } => todo!("figure this crap out"),
             }
         }
 

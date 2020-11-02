@@ -128,4 +128,3 @@ mod tests {
         build_figure(fig);
     }
 }
-

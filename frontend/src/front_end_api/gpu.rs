@@ -11,6 +11,7 @@ use gfx_hal::{
     queue::{QueueGroup, Submission},
     window,
 };
+use handy::HandleMap;
 use nalgebra::{Vector2, Vector3};
 use std::{
     borrow::Borrow,

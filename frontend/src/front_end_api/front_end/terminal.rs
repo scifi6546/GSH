@@ -1,10 +1,12 @@
-use super::{DrawCall, Event, Model, ModelId, Scene, SceneCtor, Texture, TextureId};
+use super::{Event, Model, ModelId, Scene, SceneCtor, Texture, TextureId};
+pub use super::DrawCall;
 use image::Rgba;
 use nalgebra::{Vector2, Vector3};
 use font_renderer::Renderer;
 use parser::{Deserializer,serializer,ParsedAST};
 mod io;
 mod render_surfaces;
+use render_surfaces::{Font,TextRenderer,TextureRenderer,LineRenderer};
 pub struct Terminal {
     terminal_mesh: ModelId,
     texture: TextureId,
@@ -15,17 +17,25 @@ pub struct Terminal {
     font: Renderer,
 }
 enum DrawObject{
-    Text,
+    Text(TextRenderer),
+    Texture(TextureRenderer),
+    Line(LineRenderer),
+}
+struct GlobalData{
+    font: Font
+
 }
 impl DrawObject{
-    pub fn from_ast(ast: &ParsedAST)->Self{
+    pub fn from_ast(ast: &ParsedAST,global: GlobalData)->Self{
         match ast{
-            ParsedAST::String(_) => todo!(),
-            _ =>todo!()
+            ParsedAST::String(s) => DrawObject::Text(TextRenderer::new(global.font,s)),
+            ParsedAST::Figure(_)=>todo!(),
         }
+    }
+    pub fn get_draw_calls(&mut self)->Vec<DrawCall>{
+        todo!("get draw calls of sub objects")
 
     }
-
 }
 impl Terminal {
     pub fn new() -> SceneCtor<Self> {
@@ -53,15 +63,16 @@ impl Terminal {
                 font: Renderer::new(),
                 rendering_buffer: vec![],
                 deseralizer: Deserializer::new(),
-                front_end: io::FrontEnd::new(io::Settings{command: "foo".to_string()}),
+                front_end: io::FrontEnd::new(io::Settings{command: "../test_app/target/release/test_app".to_string()}),
             }),
         )
     }
 }
 impl Terminal{
-    /// Returns output given input
+    /// reformats layout every frame. Will do things like merge text boxes
     fn process_layout(&self){
-        unimplemented!()
+        // yes I know this looks bad but I need to check length every loop inorder to make
+        // sure that the program does not walk off of the end of the array
     }
 
 }
@@ -69,30 +80,18 @@ impl Scene for Terminal {
     fn get_draw_calls(&mut self) -> Vec<DrawCall> {
         self.front_end.send_input(serializer::build_text(self.input_buffer.chars().map(|c|c).collect()));
 
-        if let Some(mut new_ast) = self.deseralizer.parse(&mut self.front_end.poll_output()).ok(){
+        if let Some(new_ast) = self.deseralizer.parse(&mut self.front_end.poll_output()).ok(){
             let mut ast = new_ast.iter().map(|a| (a.clone(),DrawObject::from_ast(a))).collect();
             self.rendering_buffer.append(&mut ast);
 
         }
-        //gets draw calls from sub scenes
-        let texture = image::RgbaImage::from_pixel(
-            1000,
-            1000,
-            Rgba([self.input_buffer.len() as u8, 0, 25, 255]),
-        );
-        
-        let texture = self.font.write_to_image(texture, &self.input_buffer,12.0);
-        vec![
-            DrawCall::DrawModel {
-                model: self.terminal_mesh.clone(),
-                texture: self.texture.clone(),
-                position: Vector3::new(0.0, 0.0, 0.0),
-            },
-            DrawCall::UpdateTexture {
-                texture: self.texture.clone(),
-                new_texture: texture,
-            },
-        ]
+        self.process_layout();
+        let mut draw = vec![];
+        for (_,draw_object) in self.rendering_buffer.iter_mut(){
+            draw.append(&mut draw_object.get_draw_calls());
+
+        }
+        return draw
     }
     fn process_event(&mut self, event: Event) {
         match event {
